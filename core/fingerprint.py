@@ -85,15 +85,33 @@ def ensure_fpcalc_available() -> None:
         )
 
 
-def generate_fingerprint(mp3_path: str) -> dict:
+# Chromaprint fingerprint length scales with the analysed audio duration. A QR
+# code tops out at version 40 (~2953 bytes at the lowest error-correction
+# level), and a full song's fingerprint blows past that. We analyse a bounded
+# leading window so the fingerprint stays small enough to embed in the graphic
+# key while remaining a robust acoustic identity. Both encode and verify use
+# the same window, so matching stays exact.
+DEFAULT_MAX_SECONDS = 60
+
+
+def generate_fingerprint(mp3_path: str, max_seconds: int = DEFAULT_MAX_SECONDS) -> dict:
     """Fingerprint an MP3 with chromaprint.
+
+    ``max_seconds`` bounds how much leading audio is analysed (default
+    ``DEFAULT_MAX_SECONDS``) so the resulting fingerprint fits inside a QR code.
+    Pass ``0`` or ``None`` to fingerprint the whole file.
 
     Returns a dict with the raw chromaprint string, duration in seconds, and a
     short (16 hex char) sha256 hash of the fingerprint for compact identity.
     """
     ensure_fpcalc_available()
     try:
-        duration, fingerprint = acoustid.fingerprint_file(mp3_path)
+        if max_seconds:
+            duration, fingerprint = acoustid.fingerprint_file(
+                mp3_path, maxlength=max_seconds
+            )
+        else:
+            duration, fingerprint = acoustid.fingerprint_file(mp3_path)
     except acoustid.FingerprintGenerationError as exc:
         raise FingerprintError(f"Failed to fingerprint {mp3_path}: {exc}") from exc
 

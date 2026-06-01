@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Audio Signature</title>
+<style>
+  :root { --bg:#0A0A0A; --panel:#141414; --fg:#00FFAA; --text:#EDEDED;
+          --sub:#888; --line:#333; --err:#FF5C5C; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+         line-height:1.5; }
+  header { padding:24px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:20px; letter-spacing:1px; }
+  header p { margin:4px 0 0; color:var(--sub); font-size:13px; }
+  main { max-width:760px; margin:0 auto; padding:24px; }
+  .tabs { display:flex; gap:8px; margin-bottom:20px; }
+  .tabs button { flex:1; padding:10px; background:var(--panel); color:var(--sub);
+                 border:1px solid var(--line); border-radius:6px; cursor:pointer;
+                 font-family:inherit; font-size:13px; }
+  .tabs button.active { color:var(--fg); border-color:var(--fg); }
+  section { display:none; }
+  section.active { display:block; }
+  label { display:block; font-size:12px; color:var(--sub); margin:14px 0 6px; }
+  input[type=file] { width:100%; padding:10px; background:var(--panel);
+                     border:1px dashed var(--line); border-radius:6px;
+                     color:var(--text); font-family:inherit; font-size:12px; }
+  button.go { margin-top:18px; padding:11px 20px; background:var(--fg);
+              color:#000; border:none; border-radius:6px; font-weight:600;
+              cursor:pointer; font-family:inherit; font-size:13px; }
+  button.go:disabled { opacity:.5; cursor:not-allowed; }
+  .out { margin-top:22px; }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:6px;
+        padding:14px; overflow:auto; font-size:12px; color:var(--fg);
+        white-space:pre-wrap; word-break:break-all; }
+  .err { color:var(--err); }
+  img.key { max-width:100%; border:1px solid var(--line); border-radius:6px;
+            margin-top:14px; display:block; }
+  a.dl { display:inline-block; margin-top:10px; color:var(--fg); font-size:12px; }
+  .spin { color:var(--sub); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>◈ AUDIO SIGNATURE</h1>
+  <p>Fingerprint an MP3 into a scannable graphic key — and decode it back.</p>
+</header>
+<main>
+  <div class="tabs">
+    <button data-tab="encode" class="active">Encode</button>
+    <button data-tab="decode">Decode</button>
+    <button data-tab="verify">Verify</button>
+  </div>
+
+  <!-- ENCODE -->
+  <section id="encode" class="active">
+    <label>MP3 file</label>
+    <input type="file" id="encode-file" accept=".mp3,audio/mpeg" />
+    <button class="go" id="encode-go">Generate graphic key</button>
+    <div class="out" id="encode-out"></div>
+  </section>
+
+  <!-- DECODE -->
+  <section id="decode">
+    <label>Graphic key (PNG / JPG)</label>
+    <input type="file" id="decode-file" accept=".png,.jpg,.jpeg,image/*" />
+    <button class="go" id="decode-go">Decode payload</button>
+    <div class="out" id="decode-out"></div>
+  </section>
+
+  <!-- VERIFY -->
+  <section id="verify">
+    <label>MP3 file</label>
+    <input type="file" id="verify-mp3" accept=".mp3,audio/mpeg" />
+    <label>Graphic key (PNG / JPG)</label>
+    <input type="file" id="verify-key" accept=".png,.jpg,.jpeg,image/*" />
+    <button class="go" id="verify-go">Verify match</button>
+    <div class="out" id="verify-out"></div>
+  </section>
+</main>
+
+<script>
+// --- tab switching ---
+document.querySelectorAll(".tabs button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+  };
+});
+
+function show(elId, html) { document.getElementById(elId).innerHTML = html; }
+function busy(elId) { show(elId, '<p class="spin">Processing…</p>'); }
+function errOut(elId, msg) { show(elId, '<pre class="err">Error: ' + msg + '</pre>'); }
+function json(elId, obj) {
+  show(elId, '<pre>' + JSON.stringify(obj, null, 2) + '</pre>');
+}
+
+async function postForm(url, form) {
+  const res = await fetch(url, { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+
+// --- encode ---
+document.getElementById("encode-go").onclick = async () => {
+  const f = document.getElementById("encode-file").files[0];
+  if (!f) return errOut("encode-out", "Choose an MP3 first.");
+  busy("encode-out");
+  try {
+    const fd = new FormData(); fd.append("file", f);
+    const data = await postForm("/api/encode", fd);
+    const src = "data:image/png;base64," + data.graphic_key;
+    show("encode-out",
+      '<img class="key" src="' + src + '" alt="graphic key" />' +
+      '<a class="dl" download="graphic_key.png" href="' + src + '">⬇ download PNG</a>' +
+      '<pre>' + JSON.stringify(data.metadata, null, 2) + '</pre>');
+  } catch (e) { errOut("encode-out", e.message); }
+};
+
+// --- decode ---
+document.getElementById("decode-go").onclick = async () => {
+  const f = document.getElementById("decode-file").files[0];
+  if (!f) return errOut("decode-out", "Choose a graphic key image first.");
+  busy("decode-out");
+  try {
+    const fd = new FormData(); fd.append("file", f);
+    json("decode-out", await postForm("/api/decode", fd));
+  } catch (e) { errOut("decode-out", e.message); }
+};
+
+// --- verify ---
+document.getElementById("verify-go").onclick = async () => {
+  const mp3 = document.getElementById("verify-mp3").files[0];
+  const key = document.getElementById("verify-key").files[0];
+  if (!mp3 || !key) return errOut("verify-out", "Choose both an MP3 and a graphic key.");
+  busy("verify-out");
+  try {
+    const fd = new FormData(); fd.append("mp3", mp3); fd.append("graphic_key", key);
+    const data = await postForm("/api/verify", fd);
+    const banner = data.match
+      ? '<pre style="color:var(--fg)">✓ MATCH  (similarity ' + data.similarity + ')</pre>'
+      : '<pre class="err">✗ NO MATCH  (similarity ' + data.similarity + ')</pre>';
+    show("verify-out", banner + '<pre>' + JSON.stringify(data, null, 2) + '</pre>');
+  } catch (e) { errOut("verify-out", e.message); }
+};
+</script>
+</body>
+</html>

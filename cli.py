@@ -11,7 +11,7 @@ import click
 from core.decoder import decode_graphic_key, verify_against_mp3
 from core.fingerprint import generate_fingerprint
 from core.graphic_key import build_graphic_key
-from core.metadata import read_metadata, write_signature_tag
+from core.metadata import read_metadata, resolve_title, write_signature_tag
 
 
 @click.group()
@@ -33,12 +33,13 @@ def encode(mp3_path: str, output: str):
 
     fingerprint_data = generate_fingerprint(mp3_path)
     meta = read_metadata(mp3_path)
+    meta["title"] = resolve_title(meta, mp3_path)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     signature_payload = {
         "fingerprint_hash": fingerprint_data["fingerprint_hash"],
         "duration": fingerprint_data["duration"],
-        "title": meta.get("title", "Unknown Title"),
+        "title": meta["title"],
         "artist": meta.get("artist", "Unknown Artist"),
         "timestamp": timestamp,
     }

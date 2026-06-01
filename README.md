@@ -18,8 +18,10 @@ the fingerprint + metadata, and can be scanned back to recover song identity.
 
 ```
 audio_signature/
-├── app.py                  # Flask app factory
+├── app.py                  # Flask app factory (serves UI + API)
 ├── cli.py                  # CLI entry point (click)
+├── static/
+│   └── index.html          # Minimal web UI (encode / decode / verify)
 ├── core/
 │   ├── fingerprint.py      # Chromaprint fingerprinting + comparison
 │   ├── metadata.py         # ID3 tag read/write via mutagen
@@ -85,6 +87,17 @@ python cli.py serve --host 0.0.0.0 --port 5000
 ```
 
 ---
+
+## Web UI
+
+Start the server and open <http://localhost:5000/> in a browser. A single
+self-contained page (`static/index.html`) provides three tabs:
+
+- **Encode** — pick an MP3, generate and preview the graphic key, download the PNG.
+- **Decode** — drop a graphic-key image and see the decoded payload.
+- **Verify** — pick an MP3 + its key and see the match result.
+
+It's vanilla HTML/JS calling the same endpoints below — no build step.
 
 ## REST API
 
@@ -191,8 +204,21 @@ or a QR backend are unavailable.
 
 - **`fpcalc` detection:** every fingerprint call checks the binary is on PATH
   and raises a clear `FingerprintError` if not.
-- **QR error correction H** keeps decoding robust; the waveform is laid out
-  beside the QR rather than over it, so the quiet zone is never disturbed.
+- **Bounded fingerprint window:** chromaprint fingerprint length scales with
+  audio duration, and a full song's fingerprint exceeds the maximum QR capacity
+  (version 40 ≈ 2953 bytes at the lowest error correction). `generate_fingerprint`
+  therefore analyses a leading window (`DEFAULT_MAX_SECONDS`, 60 s) so the
+  payload fits. Both encode and verify use the same window, so matching stays
+  exact. The reported `duration` is still the full song length. Pass
+  `max_seconds=0` to fingerprint the whole file.
+- **Adaptive QR encoding:** the payload is zlib-compressed (marked with a `Z1:`
+  prefix; the decoder also still reads legacy plain-base64 keys). The builder
+  picks the highest error-correction level that fits (H → Q → M → L). If even
+  the full fingerprint won't fit at level L, it falls back to a compact payload
+  that keeps the fingerprint *hash* and metadata but drops the full fingerprint
+  string (flagged `fp_truncated`), so encoding never crashes.
+- **QR placement:** the waveform is laid out beside the QR rather than over it,
+  so the quiet zone is never disturbed (high error correction isn't required).
 - **Fonts:** a bundled-monospace TTF is loaded if found (DejaVu Sans Mono,
   Menlo, Monaco…), otherwise `ImageFont.load_default()`.
 - **QR backends:** `pyzbar` is tried first, then `zxing-cpp`.

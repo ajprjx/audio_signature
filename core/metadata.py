@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 
 from mutagen.id3 import ID3, TXXX, ID3NoHeaderError
 from mutagen.mp3 import MP3
@@ -22,6 +23,20 @@ _TEXT_FRAMES = {
     "year": "TDRC",
     "bpm": "TBPM",
 }
+
+
+def resolve_title(metadata: dict, mp3_path: str) -> str:
+    """Return the ID3 title, falling back to the source filename stem.
+
+    For uploads saved to a random temp path, the caller can pass an
+    ``original_filename`` key in ``metadata`` to use instead of the temp name.
+    """
+    title = (metadata.get("title") or "").strip()
+    if title:
+        return title
+    source = metadata.get("original_filename") or mp3_path
+    stem = os.path.splitext(os.path.basename(source))[0]
+    return stem or "Unknown Title"
 
 
 def read_metadata(mp3_path: str) -> dict:

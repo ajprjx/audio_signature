@@ -13,7 +13,7 @@ from flask import Blueprint, jsonify, request
 from core.decoder import decode_graphic_key, verify_against_mp3
 from core.fingerprint import FingerprintError, generate_fingerprint
 from core.graphic_key import build_graphic_key
-from core.metadata import read_metadata, write_signature_tag
+from core.metadata import read_metadata, resolve_title, write_signature_tag
 
 from .schemas import ValidationError, validate_audio_upload, validate_key_upload
 
@@ -51,12 +51,16 @@ def encode():
 
         fingerprint_data = generate_fingerprint(mp3_path)
         meta = read_metadata(mp3_path)
+        # The upload is saved to a random temp path, so resolve the title from
+        # the original upload filename when ID3 tags lack one.
+        meta["original_filename"] = file.filename
+        meta["title"] = resolve_title(meta, mp3_path)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         signature_payload = {
             "fingerprint_hash": fingerprint_data["fingerprint_hash"],
             "duration": fingerprint_data["duration"],
-            "title": meta.get("title", "Unknown Title"),
+            "title": meta["title"],
             "artist": meta.get("artist", "Unknown Artist"),
             "timestamp": timestamp,
         }

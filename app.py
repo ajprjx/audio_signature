@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from flask import Flask, jsonify
+import os
+
+from flask import Flask, jsonify, send_from_directory
 
 from api.routes import api_bp
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
 def create_app() -> Flask:
@@ -12,6 +16,10 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB uploads
 
     app.register_blueprint(api_bp)
+
+    @app.route("/")
+    def index():
+        return send_from_directory(STATIC_DIR, "index.html")
 
     @app.route("/health")
     def health():

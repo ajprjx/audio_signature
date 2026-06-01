@@ -4,10 +4,30 @@ from __future__ import annotations
 
 import base64
 import json
+import zlib
 from datetime import datetime, timezone
 
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
+
+try:
+    from qrcode.exceptions import DataOverflowError
+except ImportError:  # pragma: no cover - older qrcode
+    DataOverflowError = ValueError
+
+# Compressed-payload marker so the decoder can tell zlib payloads from the
+# legacy plain-base64 ones.
+_ZLIB_PREFIX = "Z1:"
+
+# Error-correction levels tried in order. The QR sits beside the waveform (not
+# under it), so we don't strictly need level H; we start high and fall back to
+# lower redundancy / higher capacity only when a large fingerprint demands it.
+_EC_LEVELS = [
+    qrcode.constants.ERROR_CORRECT_H,
+    qrcode.constants.ERROR_CORRECT_Q,
+    qrcode.constants.ERROR_CORRECT_M,
+    qrcode.constants.ERROR_CORRECT_L,
+]
 
 from .waveform import generate_waveform_image, _hex_to_rgb
 
@@ -70,22 +90,61 @@ def _build_payload(metadata: dict, fingerprint_data: dict) -> dict:
     }
 
 
-def _make_qr(payload: dict) -> Image.Image:
-    """Encode the base64 JSON payload into a high-EC QR image."""
-    encoded = base64.b64encode(
-        json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    ).decode("ascii")
+def _encode_payload(payload: dict) -> str:
+    """Serialize a payload to a zlib-compressed, base64, marker-prefixed string."""
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    compressed = base64.b64encode(zlib.compress(raw, 9)).decode("ascii")
+    return _ZLIB_PREFIX + compressed
 
-    qr = qrcode.QRCode(
-        version=None,  # auto-size to fit the payload
-        error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=10,
-        border=2,
+
+def _qr_image_for(data: str) -> Image.Image | None:
+    """Build the smallest QR that fits ``data``, trying decreasing EC levels.
+
+    Returns None if the data won't fit even at the lowest error correction
+    (i.e. it exceeds QR version 40 capacity).
+    """
+    for ec in _EC_LEVELS:
+        qr = qrcode.QRCode(
+            version=None,  # auto-size to fit the payload
+            error_correction=ec,
+            box_size=10,
+            border=2,
+        )
+        qr.add_data(data)
+        try:
+            qr.make(fit=True)
+        except (DataOverflowError, ValueError):
+            # Too big for this EC level (or overflowed version 40); try lower.
+            continue
+        img = qr.make_image(fill_color="white", back_color=BG_COLOR).convert("RGB")
+        return img.resize((QR_SIZE, QR_SIZE), Image.NEAREST)
+    return None
+
+
+def _make_qr(payload: dict) -> Image.Image:
+    """Encode the payload into a QR image, degrading gracefully if oversized.
+
+    First tries the full payload (compressed). If even the lowest error
+    correction can't hold it, falls back to a compact payload that drops the
+    full fingerprint string (the fingerprint hash and metadata are retained),
+    so encoding never crashes on long fingerprints.
+    """
+    img = _qr_image_for(_encode_payload(payload))
+    if img is not None:
+        return img
+
+    # Fallback: keep identity + metadata, drop the bulky fingerprint string.
+    compact = dict(payload)
+    compact["fingerprint"] = ""
+    compact["fp_truncated"] = True
+    img = _qr_image_for(_encode_payload(compact))
+    if img is not None:
+        return img
+
+    raise ValueError(
+        "QR payload too large to encode even without the fingerprint. "
+        "Reduce the fingerprint window (max_seconds) further."
     )
-    qr.add_data(encoded)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="white", back_color=BG_COLOR).convert("RGB")
-    return img.resize((QR_SIZE, QR_SIZE), Image.NEAREST)
 
 
 # --- Public API -------------------------------------------------------------
@@ -206,7 +265,14 @@ def _decode_qr(png_path: str) -> str:
 
 
 def load_graphic_key_payload(png_path: str) -> dict:
-    """Decode a graphic key PNG back into its payload dict."""
+    """Decode a graphic key PNG back into its payload dict.
+
+    Handles both the zlib-compressed payload format (``Z1:`` prefix) and the
+    legacy plain-base64 format.
+    """
     raw_text = _decode_qr(png_path)
-    decoded = base64.b64decode(raw_text)
+    if raw_text.startswith(_ZLIB_PREFIX):
+        decoded = zlib.decompress(base64.b64decode(raw_text[len(_ZLIB_PREFIX):]))
+    else:
+        decoded = base64.b64decode(raw_text)
     return json.loads(decoded.decode("utf-8"))
