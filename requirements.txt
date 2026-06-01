@@ -1,0 +1,14 @@
+pyacoustid
+librosa
+soundfile
+mutagen
+qrcode[pil]
+Pillow
+flask
+click
+numpy
+# QR decoding — install at least one backend:
+pyzbar          # requires the libzbar0 system library
+zxing-cpp       # pure-python wheels, fallback decoder
+# Testing
+pytest
