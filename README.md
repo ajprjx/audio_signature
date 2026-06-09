@@ -5,12 +5,14 @@ An audio fingerprinting and **visual key** system. Given an MP3, it:
 1. Generates a unique **chromaprint fingerprint**.
 2. Embeds the fingerprint into the MP3's **ID3 metadata** (a custom
    `TXXX:AudioSignature` frame, base64 JSON).
-3. Produces a styled **PNG graphic key** — a high-error-correction QR code
-   beside a neon waveform visualization.
-4. Exposes a **Flask REST API** and a **CLI** for encode / decode / verify.
+3. Produces a styled **800×300 PNG graphic key** — QR code, neon waveform, and
+   a **64×64 pixel glyph** panel.
+4. Writes a standalone **64×64 pixel glyph PNG** — Reed–Solomon protected,
+   self-contained, no QR scanner required.
+5. Exposes a **Flask REST API** and a **CLI** for encode / decode / verify.
 
-The graphic key is the core artifact: a visually distinctive PNG that encodes
-the fingerprint + metadata, and can be scanned back to recover song identity.
+The graphic key is scannable via QR; the pixel glyph encodes the same acoustic
+identity directly in pixel values and decodes with `decode_glyph()`.
 
 ---
 
@@ -26,13 +28,16 @@ audio_signature/
 │   ├── fingerprint.py      # Chromaprint fingerprinting + comparison
 │   ├── metadata.py         # ID3 tag read/write via mutagen
 │   ├── waveform.py         # Waveform image via librosa + Pillow
-│   ├── graphic_key.py      # QR + waveform compositing, QR decode
-│   └── decoder.py          # Decode + verify pipelines
+│   ├── pixel_glyph.py      # 64×64 glyph encode/decode (spiral + RS + LUT)
+│   ├── graphic_key.py      # QR + waveform + glyph compositing, QR decode
+│   └── decoder.py          # Graphic key decode + verify pipelines
 ├── api/
-│   ├── routes.py           # /api/encode, /api/decode, /api/verify
+│   ├── routes.py           # /api/encode, /api/decode, /api/decode/glyph, /api/verify
 │   └── schemas.py          # Upload validation
 ├── tests/
-│   └── test_roundtrip.py   # Encode → decode → verify roundtrip
+│   ├── conftest.py         # Shared sample_mp3 fixture
+│   ├── test_roundtrip.py   # Graphic key QR roundtrip
+│   └── test_pixel_glyph.py # Pixel glyph roundtrip + LUT tests
 └── requirements.txt
 ```
 
@@ -73,14 +78,21 @@ pip install -r requirements.txt
 ## CLI usage
 
 ```bash
-# Encode: fingerprint, tag the MP3, write a graphic key PNG into ./keys/
-python cli.py encode path/to/song.mp3 --output ./keys/
+# Encode: fingerprint, tag the MP3, write graphic key + pixel glyph into ./keys/
+python cli.py encode path/to/song.mp3 --output ./keys/ --lut magma
 
-# Decode: read a graphic key PNG back into its payload
+# Decode a graphic key (QR payload)
 python cli.py decode ./keys/song_key.png
 
-# Verify: re-fingerprint the MP3 and compare against its graphic key
+# Decode a standalone 64×64 pixel glyph
+python cli.py decode-glyph ./keys/song_glyph.png
+
+# Verify MP3 against graphic key or pixel glyph
 python cli.py verify path/to/song.mp3 ./keys/song_key.png
+python cli.py verify-glyph ./keys/song_glyph.png path/to/song.mp3
+
+# List available glyph colour LUTs
+python cli.py luts
 
 # Serve the REST API
 python cli.py serve --host 0.0.0.0 --port 5000
@@ -112,14 +124,19 @@ Response JSON:
 ```json
 {
   "graphic_key": "<base64 PNG>",
+  "glyph": "<base64 64×64 PNG>",
+  "glyph_display": "<base64 256×256 PNG>",
   "metadata": {
     "title": "...",
     "artist": "...",
     "duration": 213.4,
-    "fingerprint_hash": "abc123..."
+    "fingerprint_hash": "abc123...",
+    "lut_name": "magma"
   }
 }
 ```
+
+Optional form field `lut` — one of `magma`, `viridis`, `inferno`, `plasma`, `copper`.
 
 ### `POST /api/decode`
 
@@ -136,6 +153,24 @@ Response JSON:
   "fingerprint": "...",
   "generated_at": "2024-01-15T10:30:00Z",
   "verified": true
+}
+```
+
+### `POST /api/decode/glyph`
+
+`multipart/form-data` with field `file` (a 64×64 glyph PNG).
+
+Response JSON:
+
+```json
+{
+  "fingerprint_hex": "...",
+  "duration": 213.4,
+  "bpm": 0,
+  "lut_name": "magma",
+  "verified": true,
+  "crc_match": true,
+  "ecc_corrections": 0
 }
 ```
 
@@ -163,24 +198,28 @@ blocks.
 ## Graphic key layout
 
 ```
-┌─────────────────────────────────┐
-│            SONG TITLE            │  top label (white, monospace)
-│        Artist · Duration         │  sub-label
-├──────────────────┬──────────────┤
-│                  │              │
-│    QR CODE       │   WAVEFORM   │  side by side, vertically centered
-│   (left half)    │ (right half) │
-│                  │              │
-├──────────────────┴──────────────┤
-│   fingerprint_hash  [timestamp]  │  footer, small monospace
-└─────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                        SONG TITLE                             │
+│                    Artist · Duration                          │
+├─────────────────┬─────────────────┬──────────────────────────┤
+│    QR CODE      │    WAVEFORM     │   PIXEL GLYPH (128×128)  │
+│   (220×220)     │   (252×160)     │   NEAREST upscale of 64² │
+├─────────────────┴─────────────────┴──────────────────────────┤
+│              fingerprint_hash  [timestamp]                      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-- Canvas: 600×300, background `#0A0A0A`.
-- QR: white modules, ~220×220, `ERROR_CORRECT_H` (30% redundancy).
-- Waveform: neon `#00FFAA`, 260×160, kept strictly in the right panel — never
-  layered over the QR modules.
-- Separator line `#333333` between the two panels.
+- Canvas: **800×300**, background `#0A0A0A`.
+- Three equal panels separated by `#333333` lines.
+- QR: white modules, ~220×220, adaptive error correction.
+- Waveform: neon `#00FFAA`, centred in the middle panel.
+- Glyph: 64×64 pixel art upscaled 2× with `Image.NEAREST` in the right panel.
+
+## Pixel glyph (64×64)
+
+Standalone PNG encoding fingerprint bytes via a clockwise spiral, RS(255,120)
+error correction, and a perceptual colour LUT. See `core/pixel_glyph.py` and
+`claude.md` for the full byte layout. **PNG only** — never JPEG.
 
 The QR payload (base64 JSON) carries the full chromaprint string plus
 metadata, so the key is self-describing.
@@ -193,10 +232,10 @@ metadata, so the key is self-describing.
 pytest tests/
 ```
 
-`test_roundtrip.py` synthesizes a short sine-sweep MP3 (no network needed),
-runs the full encode pipeline, reads back the ID3 tag, decodes the PNG, and
-verifies the MP3 against its key. It skips gracefully if `fpcalc`, `ffmpeg`,
-or a QR backend are unavailable.
+`test_roundtrip.py` exercises the QR graphic key pipeline; `test_pixel_glyph.py`
+covers glyph roundtrip, all five LUTs, JPEG rejection, and LUT monotonicity.
+Tests synthesize a 10-second sine-sweep MP3 (no network). They skip gracefully
+if `fpcalc`, `ffmpeg`, or a QR backend are unavailable.
 
 ---
 
@@ -222,3 +261,6 @@ or a QR backend are unavailable.
 - **Fonts:** a bundled-monospace TTF is loaded if found (DejaVu Sans Mono,
   Menlo, Monaco…), otherwise `ImageFont.load_default()`.
 - **QR backends:** `pyzbar` is tried first, then `zxing-cpp`.
+- **Pixel glyph:** 120-byte `fingerprint_bytes` packed from chromaprint frames;
+  RS(255,120) via `reedsolo>=1.7.0`; five monotonic LUTs; manifest in
+  bottom-right 4×4 block excluded from spiral traversal.

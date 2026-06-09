@@ -93,6 +93,31 @@ def ensure_fpcalc_available() -> None:
 # the same window, so matching stays exact.
 DEFAULT_MAX_SECONDS = 60
 
+# Fixed-width binary fingerprint for the 64×64 pixel glyph (RS data segment).
+FINGERPRINT_BYTE_LEN = 120
+
+
+def fingerprint_to_bytes(fingerprint_str: str) -> bytes:
+    """Pack a chromaprint string into exactly ``FINGERPRINT_BYTE_LEN`` bytes.
+
+    Decoded chromaprint frames are packed as big-endian uint32 values, then
+    truncated or zero-padded. Falls back to a deterministic hash chain when the
+    chromaprint ctypes binding is unavailable.
+    """
+    try:
+        ints = _decode_fingerprint_bits(fingerprint_str)
+        packed = b"".join(i.to_bytes(4, "big", signed=False) for i in ints)
+        if len(packed) >= FINGERPRINT_BYTE_LEN:
+            return packed[:FINGERPRINT_BYTE_LEN]
+        return packed + b"\x00" * (FINGERPRINT_BYTE_LEN - len(packed))
+    except Exception:
+        block = fingerprint_str.encode("ascii")
+        out = bytearray()
+        while len(out) < FINGERPRINT_BYTE_LEN:
+            block = hashlib.sha256(block).digest()
+            out.extend(block)
+        return bytes(out[:FINGERPRINT_BYTE_LEN])
+
 
 def generate_fingerprint(mp3_path: str, max_seconds: int = DEFAULT_MAX_SECONDS) -> dict:
     """Fingerprint an MP3 with chromaprint.
@@ -127,6 +152,7 @@ def generate_fingerprint(mp3_path: str, max_seconds: int = DEFAULT_MAX_SECONDS) 
 
     return {
         "fingerprint": fingerprint_str,
+        "fingerprint_bytes": fingerprint_to_bytes(fingerprint_str),
         "duration": round(float(duration), 1),
         "fingerprint_hash": fingerprint_hash,
     }

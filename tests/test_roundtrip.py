@@ -10,16 +10,12 @@ from __future__ import annotations
 import os
 import shutil
 
-import numpy as np
 import pytest
 
 from core.decoder import decode_graphic_key, verify_against_mp3
 from core.fingerprint import generate_fingerprint
 from core.graphic_key import build_graphic_key
 from core.metadata import read_signature_tag, write_signature_tag
-
-SAMPLE_RATE = 44100
-DURATION_SEC = 8
 
 
 def _qr_backend_available() -> bool:
@@ -36,38 +32,6 @@ def _qr_backend_available() -> bool:
     except Exception:
         pass
     return False
-
-
-@pytest.fixture()
-def sample_mp3(tmp_path):
-    """Create a short MP3 of a frequency-sweeping sine wave."""
-    soundfile = pytest.importorskip("soundfile")
-
-    if shutil.which("ffmpeg") is None and shutil.which("lame") is None:
-        pytest.skip("ffmpeg/lame required to encode the sample MP3")
-
-    t = np.linspace(0, DURATION_SEC, SAMPLE_RATE * DURATION_SEC, endpoint=False)
-    # A sweep so the fingerprint and waveform have real structure.
-    freq = np.linspace(220, 880, t.size)
-    signal = 0.5 * np.sin(2 * np.pi * freq * t).astype(np.float32)
-
-    wav_path = tmp_path / "sample.wav"
-    soundfile.write(str(wav_path), signal, SAMPLE_RATE)
-
-    mp3_path = tmp_path / "sample.mp3"
-    # Convert via ffmpeg if available.
-    if shutil.which("ffmpeg"):
-        rc = os.system(
-            f'ffmpeg -y -loglevel error -i "{wav_path}" "{mp3_path}"'
-        )
-        if rc != 0 or not mp3_path.exists():
-            pytest.skip("ffmpeg failed to produce an MP3")
-    else:
-        rc = os.system(f'lame --silent "{wav_path}" "{mp3_path}"')
-        if rc != 0 or not mp3_path.exists():
-            pytest.skip("lame failed to produce an MP3")
-
-    return str(mp3_path)
 
 
 def test_full_roundtrip(sample_mp3, tmp_path):

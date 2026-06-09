@@ -12,6 +12,13 @@ from core.decoder import decode_graphic_key, verify_against_mp3
 from core.fingerprint import generate_fingerprint
 from core.graphic_key import build_graphic_key
 from core.metadata import read_metadata, resolve_title, write_signature_tag
+from core.pixel_glyph import (
+    decode_glyph,
+    generate_glyph,
+    list_luts,
+    render_glyph_display,
+    verify_glyph_against_mp3,
+)
 
 
 @click.group()
@@ -27,7 +34,20 @@ def cli():
     default="./keys/",
     help="Output directory for the graphic key PNG.",
 )
-def encode(mp3_path: str, output: str):
+@click.option(
+    "--lut",
+    default="magma",
+    type=click.Choice(list_luts()),
+    help="Pixel glyph colour LUT.",
+)
+@click.option(
+    "--size",
+    type=click.Choice(["64", "256"]),
+    default="64",
+    show_default=True,
+    help="Glyph output size. 256px is display-only (not decodable).",
+)
+def encode(mp3_path: str, output: str, lut: str, size: str):
     """Fingerprint MP3_PATH, tag it, and write a graphic key PNG."""
     os.makedirs(output, exist_ok=True)
 
@@ -47,15 +67,74 @@ def encode(mp3_path: str, output: str):
 
     base = os.path.splitext(os.path.basename(mp3_path))[0]
     out_png = os.path.join(output, f"{base}_key.png")
+    glyph_png = os.path.join(output, f"{base}_glyph.png")
 
     meta_for_key = dict(meta)
     meta_for_key["timestamp"] = timestamp
-    build_graphic_key(mp3_path, out_png, meta_for_key, fingerprint_data)
+    build_graphic_key(mp3_path, out_png, meta_for_key, fingerprint_data, lut_name=lut)
+    glyph_info = generate_glyph(mp3_path, glyph_png, lut_name=lut)
 
     click.echo(f"Fingerprint hash: {fingerprint_data['fingerprint_hash']}")
     click.echo(f"Duration:         {fingerprint_data['duration']}s")
+    click.echo(f"LUT:              {lut}")
     click.echo(f"Signature tag written to: {mp3_path}")
     click.echo(f"Graphic key saved to:     {out_png}")
+    click.echo(f"Pixel glyph saved to:   {glyph_info['glyph_path']}")
+    if "display_path" in glyph_info:
+        click.echo(f"Glyph display (256px):  {glyph_info['display_path']}")
+
+    if size == "256":
+        native_path = os.path.join(output, f"{base}_glyph_256native.png")
+        display_img = render_glyph_display(
+            mp3_path, lut_name=lut, fingerprint_data=fingerprint_data
+        )
+        display_img.save(native_path, format="PNG", optimize=False)
+        click.echo(f"Native 256px glyph:    {native_path}")
+        click.echo("Note: 256px glyph is display-only and cannot be decoded.")
+
+
+@cli.command("decode-glyph")
+@click.argument("png_path", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--size",
+    type=click.Choice(["64", "256"]),
+    default="64",
+    show_default=True,
+    help="Glyph size. Only 64px is decodable.",
+)
+def decode_glyph_cmd(png_path: str, size: str):
+    """Decode a 64×64 pixel glyph PNG and print its payload."""
+    if size == "256":
+        click.echo(
+            "Error: 256px glyphs are display-only. Decode requires the 64px glyph.",
+            err=True,
+        )
+        raise SystemExit(1)
+    result = decode_glyph(png_path)
+    result.pop("fingerprint_bytes", None)
+    click.echo(json.dumps(result, indent=2))
+
+
+@cli.command("verify-glyph")
+@click.argument("png_path", type=click.Path(exists=True, dir_okay=False))
+@click.argument("mp3_path", type=click.Path(exists=True, dir_okay=False))
+def verify_glyph_cmd(png_path: str, mp3_path: str):
+    """Verify a pixel glyph PNG against MP3_PATH."""
+    result = verify_glyph_against_mp3(png_path, mp3_path)
+    serializable = dict(result)
+    decoded = dict(serializable.get("decoded") or {})
+    decoded.pop("fingerprint_bytes", None)
+    serializable["decoded"] = decoded
+    click.echo(json.dumps(serializable, indent=2))
+    raise SystemExit(0 if result["match"] else 1)
+
+
+@cli.command()
+def luts():
+    """List available pixel glyph colour LUTs."""
+    click.echo("Available LUTs:")
+    for name in list_luts():
+        click.echo(f"  - {name}")
 
 
 @cli.command()

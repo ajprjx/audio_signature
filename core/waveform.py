@@ -18,6 +18,11 @@ def _hex_to_rgb(color: str) -> tuple[int, int, int]:
     return tuple(int(color[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
 
 
+def get_rms_envelope(mp3_path: str, n_frames: int = 128) -> list[float]:
+    """Return an ``n_frames`` length RMS envelope as floats in 0.0–1.0."""
+    return compute_rms_envelope(mp3_path, n_frames).tolist()
+
+
 def compute_rms_envelope(mp3_path: str, n_bars: int) -> np.ndarray:
     """Load audio and return an ``n_bars`` length RMS envelope in 0..1."""
     y, sr = librosa.load(mp3_path, sr=None, mono=True)

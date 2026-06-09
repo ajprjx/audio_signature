@@ -29,19 +29,22 @@ _EC_LEVELS = [
     qrcode.constants.ERROR_CORRECT_L,
 ]
 
+from .pixel_glyph import render_glyph_image
 from .waveform import generate_waveform_image, _hex_to_rgb
 
 # --- Layout constants -------------------------------------------------------
 
-CANVAS_W, CANVAS_H = 600, 300
+CANVAS_W, CANVAS_H = 800, 300
 BG_COLOR = "#0A0A0A"
 SEPARATOR_COLOR = "#333333"
 TEXT_COLOR = "#FFFFFF"
 SUBTEXT_COLOR = "#AAAAAA"
 WAVE_FG = "#00FFAA"
 
+PANEL_W = CANVAS_W // 3
 QR_SIZE = 220
-WAVE_W, WAVE_H = 260, 160
+WAVE_W, WAVE_H = 252, 160
+GLYPH_DISPLAY_SIZE = 128
 
 HEADER_H = 56
 FOOTER_H = 30
@@ -155,8 +158,9 @@ def build_graphic_key(
     output_png_path: str,
     metadata: dict,
     fingerprint_data: dict,
+    lut_name: str = "magma",
 ) -> str:
-    """Compose the final 600x300 graphic key PNG and write it to disk."""
+    """Compose the final 800×300 graphic key PNG and write it to disk."""
     payload = _build_payload(metadata, fingerprint_data)
 
     canvas = Image.new("RGB", (CANVAS_W, CANVAS_H), _hex_to_rgb(BG_COLOR))
@@ -179,31 +183,52 @@ def build_graphic_key(
     body_top = HEADER_H
     body_bottom = CANVAS_H - FOOTER_H
     body_h = body_bottom - body_top
-    mid_x = CANVAS_W // 2
+    sep1 = PANEL_W
+    sep2 = PANEL_W * 2
 
     # QR code centered in the left panel.
     qr_img = _make_qr(payload)
-    qr_x = (mid_x - QR_SIZE) // 2
+    qr_x = (sep1 - QR_SIZE) // 2
     qr_y = body_top + (body_h - QR_SIZE) // 2
     canvas.paste(qr_img, (qr_x, qr_y))
 
-    # Separator line between QR and waveform panels.
-    draw.line(
-        [(mid_x, body_top + 6), (mid_x, body_bottom - 6)],
-        fill=_hex_to_rgb(SEPARATOR_COLOR),
-        width=1,
-    )
+    # Separator lines between the three panels.
+    for x in (sep1, sep2):
+        draw.line(
+            [(x, body_top + 6), (x, body_bottom - 6)],
+            fill=_hex_to_rgb(SEPARATOR_COLOR),
+            width=1,
+        )
 
-    # Waveform centered in the right panel — strictly NOT overlapping the QR.
+    # Waveform centered in the middle panel.
     try:
         wave_img = generate_waveform_image(
             mp3_path, width=WAVE_W, height=WAVE_H, color_fg=WAVE_FG, color_bg=BG_COLOR
         )
     except Exception:
         wave_img = Image.new("RGB", (WAVE_W, WAVE_H), _hex_to_rgb(BG_COLOR))
-    wave_x = mid_x + ((CANVAS_W - mid_x) - WAVE_W) // 2
+    wave_x = sep1 + (PANEL_W - WAVE_W) // 2
     wave_y = body_top + (body_h - WAVE_H) // 2
     canvas.paste(wave_img, (wave_x, wave_y))
+
+    # Pixel glyph (64×64 upscaled 2×) in the right panel.
+    try:
+        bpm = 0
+        if metadata.get("bpm"):
+            try:
+                bpm = int(float(metadata["bpm"]))
+            except (TypeError, ValueError):
+                bpm = 0
+        glyph_img = render_glyph_image(
+            mp3_path, lut_name, fingerprint_data, bpm=bpm
+        ).resize((GLYPH_DISPLAY_SIZE, GLYPH_DISPLAY_SIZE), Image.NEAREST)
+    except Exception:
+        glyph_img = Image.new(
+            "RGB", (GLYPH_DISPLAY_SIZE, GLYPH_DISPLAY_SIZE), _hex_to_rgb(BG_COLOR)
+        )
+    glyph_x = sep2 + (PANEL_W - GLYPH_DISPLAY_SIZE) // 2
+    glyph_y = body_top + (body_h - GLYPH_DISPLAY_SIZE) // 2
+    canvas.paste(glyph_img, (glyph_x, glyph_y))
 
     # --- Footer ---
     footer = f"{payload['fp_hash']}   [{payload['ts']}]"

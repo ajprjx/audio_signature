@@ -30,3 +30,12 @@ def validate_key_upload(file_storage) -> None:
         raise ValidationError("No file provided.")
     if _ext(file_storage.filename) not in ALLOWED_KEY_EXT:
         raise ValidationError("Graphic key must be a .png/.jpg image.")
+
+
+def validate_glyph_size(size_str: str | None) -> int:
+    """Coerce the optional ``size`` form field to ``64`` or ``256``."""
+    if size_str is None or size_str == "":
+        return 64
+    if size_str not in ("64", "256"):
+        raise ValidationError("size must be '64' or '256'.")
+    return int(size_str)
