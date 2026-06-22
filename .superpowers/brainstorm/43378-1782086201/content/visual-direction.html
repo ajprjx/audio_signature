@@ -1,0 +1,96 @@
+<h2>Three visual directions</h2>
+<p class="subtitle">The glyph is the hero — a vivid 64&times;64 artifact. Which world should it live in? Click one.</p>
+
+<style>
+  .dir-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:8px; }
+  @media (max-width:900px){ .dir-grid{ grid-template-columns:1fr; } }
+  .dir { border-radius:16px; overflow:hidden; cursor:pointer;
+         border:2px solid transparent; transition:transform .15s, border-color .15s; }
+  .dir:hover { transform:translateY(-4px); }
+  .dir.selected { border-color:#7c9cff; }
+  .dir .frame { height:280px; padding:22px; display:flex; flex-direction:column; }
+  .dir .meta { padding:14px 16px; background:#16161c; }
+  .dir .meta h3 { margin:0 0 4px; font-size:15px; color:#fff; }
+  .dir .meta p { margin:0; font-size:12px; color:#9aa0ad; line-height:1.45; }
+
+  /* faux glyph */
+  .glyph { width:120px; height:120px; border-radius:10px; position:relative;
+           background:
+             conic-gradient(from 200deg at 60% 40%,
+               #1a0033, #4a0e6b, #b5179e, #f72585, #ff8500, #ffd166, #fff3e0, #1a0033);
+           box-shadow:0 0 0 1px rgba(255,255,255,.08); }
+  .glyph::after { content:""; position:absolute; inset:0; border-radius:10px;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 6px, transparent 6px 8px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.22) 0 6px, transparent 6px 8px);
+    mix-blend-mode:overlay; }
+  .glyph.viridis { background:conic-gradient(from 200deg at 60% 40%,
+     #1b0c41,#33638d,#1f9e89,#6cce5a,#fde725,#1b0c41); }
+
+  /* A — Obsidian */
+  .obsidian { background:radial-gradient(120% 120% at 50% 0%, #15151c 0%, #08080b 70%); align-items:center; justify-content:center; gap:18px; }
+  .obsidian .halo { padding:26px; border-radius:24px; background:radial-gradient(circle at 50% 45%, rgba(247,37,133,.18), transparent 70%); }
+  .obsidian .tag { font:600 10px ui-monospace,monospace; letter-spacing:2px; color:#6b7280; text-transform:uppercase; }
+  .obsidian .name { font:600 14px ui-sans-serif,system-ui; color:#f3f4f6; letter-spacing:.5px; }
+
+  /* B — Paper */
+  .paper { background:#f7f5ef; align-items:center; justify-content:center; gap:16px; }
+  .paper .name { font:600 20px Georgia,'Times New Roman',serif; color:#1a1a1a; letter-spacing:.3px; }
+  .paper .rule { width:46px; height:2px; background:#1a1a1a; }
+  .paper .sub { font:400 11px ui-sans-serif,system-ui; color:#6b6257; letter-spacing:1px; text-transform:uppercase; }
+
+  /* C — Spectrum */
+  .spectrum { background:linear-gradient(135deg,#2a1a4a,#3a1f5e 50%,#7c2d8f); align-items:center; justify-content:center; gap:16px; }
+  .spectrum .card { background:rgba(255,255,255,.07); backdrop-filter:blur(6px);
+     border:1px solid rgba(255,255,255,.14); border-radius:18px; padding:18px;
+     display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .spectrum .swatches { display:flex; gap:6px; }
+  .spectrum .sw { width:18px; height:18px; border-radius:5px; }
+  .spectrum .name { font:700 13px ui-sans-serif,system-ui; color:#fff; }
+</style>
+
+<div class="dir-grid">
+  <div class="dir selected" data-choice="obsidian" onclick="toggleSelect(this)">
+    <div class="frame obsidian">
+      <div class="tag">audio signature</div>
+      <div class="halo"><div class="glyph"></div></div>
+      <div class="name">midnight_drive.mp3</div>
+    </div>
+    <div class="meta">
+      <h3>A · Obsidian</h3>
+      <p>Refined dark gallery. Glyph glows on near-black, soft halo, mono micro-labels. Premium, focused.</p>
+    </div>
+  </div>
+
+  <div class="dir" data-choice="paper" onclick="toggleSelect(this)">
+    <div class="frame paper">
+      <div class="name">Audio Signature</div>
+      <div class="rule"></div>
+      <div class="glyph"></div>
+      <div class="sub">acoustic identity</div>
+    </div>
+    <div class="meta">
+      <h3>B · Paper</h3>
+      <p>Light editorial / museum label. Cream canvas, serif title, the glyph is the only color. Calm, elegant.</p>
+    </div>
+  </div>
+
+  <div class="dir" data-choice="spectrum" onclick="toggleSelect(this)">
+    <div class="frame spectrum">
+      <div class="card">
+        <div class="glyph viridis"></div>
+        <div class="swatches">
+          <div class="sw" style="background:#440154"></div>
+          <div class="sw" style="background:#31688e"></div>
+          <div class="sw" style="background:#35b779"></div>
+          <div class="sw" style="background:#fde725"></div>
+        </div>
+        <div class="name">viridis</div>
+      </div>
+    </div>
+    <div class="meta">
+      <h3>C · Spectrum</h3>
+      <p>Playful, colorful chrome. Glass cards, rounded everything, palette swatches up front. Friendly, vivid.</p>
+    </div>
+  </div>
+</div>

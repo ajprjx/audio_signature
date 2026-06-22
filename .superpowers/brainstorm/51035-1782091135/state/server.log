@@ -1,0 +1,7 @@
+{"type":"server-started","port":54122,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:54122","screen_dir":"/Users/alistairjoseph/Projects/audio_signature/.superpowers/brainstorm/51035-1782091135/content","state_dir":"/Users/alistairjoseph/Projects/audio_signature/.superpowers/brainstorm/51035-1782091135/state"}
+{"type":"screen-added","file":"/Users/alistairjoseph/Projects/audio_signature/.superpowers/brainstorm/51035-1782091135/content/v1-samples.html"}
+{"type":"screen-added","file":"/Users/alistairjoseph/Projects/audio_signature/.superpowers/brainstorm/51035-1782091135/content/spectral-samples.html"}
+{"type":"screen-added","file":"/Users/alistairjoseph/Projects/audio_signature/.superpowers/brainstorm/51035-1782091135/content/spectral-v2.html"}
+{"type":"screen-added","file":"/Users/alistairjoseph/Projects/audio_signature/.superpowers/brainstorm/51035-1782091135/content/spectral-look.html"}
+{"type":"screen-added","file":"/Users/alistairjoseph/Projects/audio_signature/.superpowers/brainstorm/51035-1782091135/content/spectral-palette.html"}
+{"type":"server-stopped","reason":"idle timeout"}

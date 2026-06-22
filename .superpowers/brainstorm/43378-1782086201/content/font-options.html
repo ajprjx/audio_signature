@@ -1,0 +1,62 @@
+<h2>Pick the serif</h2>
+<p class="subtitle">Same editorial feel as before, four different faces. Each shown as the wordmark, a heading, and small caps label on obsidian. Click one.</p>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Newsreader:wght@400;500;600&family=Spectral:wght@400;500;600&family=EB+Garamond:wght@400;500;600&display=swap');
+
+  .ftgrid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px; }
+  @media (max-width:760px){ .ftgrid{ grid-template-columns:1fr; } }
+  .ftcard { border-radius:14px; cursor:pointer; padding:26px 28px;
+     background:radial-gradient(130% 110% at 50% -10%, #15151c 0%, #0a0a0e 70%);
+     border:2px solid #1c1c24; transition:transform .15s, border-color .15s; }
+  .ftcard:hover{ transform:translateY(-3px); }
+  .ftcard.selected{ border-color:#9a7cff; }
+  .ftcard .word { color:#f3f1ec; font-size:30px; letter-spacing:.3px; }
+  .ftcard .word .mark{ color:#9a7cff; margin-right:8px; }
+  .ftcard .head { color:#cfcdc6; font-size:18px; margin:14px 0 6px; }
+  .ftcard .body { color:#8a8a96; font-size:14px; line-height:1.5; }
+  .ftcard .label { margin-top:14px; font:600 11px ui-monospace,monospace;
+     letter-spacing:2px; text-transform:uppercase; color:#6a6a76; }
+  .ftcard .nm { margin-top:16px; font:600 11px ui-monospace,monospace;
+     letter-spacing:1px; color:#9a7cff; }
+
+  .fr .word,.fr .head,.fr .body{ font-family:'Fraunces',serif; }
+  .nr .word,.nr .head,.nr .body{ font-family:'Newsreader',serif; }
+  .sp .word,.sp .head,.sp .body{ font-family:'Spectral',serif; }
+  .gd .word,.gd .head,.gd .body{ font-family:'EB Garamond',serif; }
+  .word{ font-weight:600; } .head{ font-weight:500; } .body{ font-weight:400; }
+</style>
+
+<div class="ftgrid">
+  <div class="ftcard fr selected" data-choice="fraunces" onclick="toggleSelect(this)">
+    <div class="word"><span class="mark">&#9670;</span>Audio Signature</div>
+    <div class="head">Generate a glyph</div>
+    <div class="body">A soft, modern old-style serif with gentle warmth and character.</div>
+    <div class="label">Acoustic Identity</div>
+    <div class="nm">Fraunces</div>
+  </div>
+
+  <div class="ftcard nr" data-choice="newsreader" onclick="toggleSelect(this)">
+    <div class="word"><span class="mark">&#9670;</span>Audio Signature</div>
+    <div class="head">Generate a glyph</div>
+    <div class="body">Editorial and warm, drawn for reading — quiet, literary, trustworthy.</div>
+    <div class="label">Acoustic Identity</div>
+    <div class="nm">Newsreader</div>
+  </div>
+
+  <div class="ftcard sp" data-choice="spectral" onclick="toggleSelect(this)">
+    <div class="word"><span class="mark">&#9670;</span>Audio Signature</div>
+    <div class="head">Generate a glyph</div>
+    <div class="body">Calm, refined, slightly technical. Pairs cleanly with monospace data.</div>
+    <div class="label">Acoustic Identity</div>
+    <div class="nm">Spectral</div>
+  </div>
+
+  <div class="ftcard gd" data-choice="garamond" onclick="toggleSelect(this)">
+    <div class="word"><span class="mark">&#9670;</span>Audio Signature</div>
+    <div class="head">Generate a glyph</div>
+    <div class="body">Classic humanist Garamond — the closest to Palatino's old-style roots.</div>
+    <div class="label">Acoustic Identity</div>
+    <div class="nm">EB Garamond</div>
+  </div>
+</div>

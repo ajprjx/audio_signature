@@ -1,0 +1,35 @@
+{
+  "encode_64": {
+    "glyph_size": null,
+    "glyph_decodable": null,
+    "metadata": {
+      "artist": "Death Grips",
+      "duration": 202.0,
+      "fingerprint_hash": "9656a5c8981dee46",
+      "lut_name": "magma",
+      "title": "Klink"
+    }
+  },
+  "encode_256": {
+    "glyph_size": null,
+    "glyph_decodable": null,
+    "metadata": {
+      "artist": "Death Grips",
+      "duration": 202.0,
+      "fingerprint_hash": "9656a5c8981dee46",
+      "lut_name": "magma",
+      "title": "Klink"
+    }
+  },
+  "decode_64": {
+    "bpm": 0,
+    "crc_match": true,
+    "duration": 202.0,
+    "ecc_corrections": 0,
+    "fingerprint_hex": "94be3e0494bd360494bc761494bce62495bca72495fca32c956c822c956c822d952d83ee956e83aeb76d91aab76cc1bab76cd1bab72d5d9ab72e1b9ab73e3b9a953e2bca943e294a947e280b94fc240994ac300994bd300b95bf703a979ff02a969ff06e96cbf42e964bfc1e960bd91f971adb1c955a9e1c",
+    "lut_name": "magma",
+    "rs_recovered": true,
+    "verified": true
+  },
+  "decode_256_status": 200
+}
