@@ -33,21 +33,27 @@ audio_signature/
 ├── claude.md               # This file
 ├── README.md               # User-facing docs
 ├── requirements.txt
-├── static/index.html       # Web UI (encode / decode / verify — QR graphic key only)
+├── static/index.html       # Web UI (glyph-only: Generate / Decode / Verify — Obsidian/Newsreader)
+├── docs/signed-glyph/      # Signed-glyph initiative design notes (capacity-research.md)
 ├── core/
 │   ├── fingerprint.py      # Chromaprint + fingerprint_bytes (120B fixed)
 │   ├── metadata.py         # ID3 read/write (mutagen)
 │   ├── waveform.py         # RMS envelope + bar-chart image
 │   ├── pixel_glyph.py      # 64×64 glyph encode/decode
 │   ├── graphic_key.py      # QR + waveform + glyph compositing
-│   └── decoder.py          # Graphic key decode + verify
+│   ├── decoder.py          # Graphic key decode + verify
+│   ├── spectral.py         # SpectralCodec: lossless bytes↔smooth 256² DCT field (signed-glyph WIP)
+│   └── glyph.py            # Ultra-smooth cohesive 256² glyph layer (signed-glyph WIP)
 ├── api/
-│   ├── routes.py           # /api/encode, /decode, /decode/glyph, /verify
+│   ├── routes.py           # /api/encode, /decode, /decode/glyph, /verify, /verify/glyph
 │   └── schemas.py          # Upload validation (.mp3, .png/.jpg/.jpeg)
 └── tests/
     ├── conftest.py         # Shared sample_mp3 fixture (10s sweep)
     ├── test_roundtrip.py   # Graphic key QR roundtrip
-    └── test_pixel_glyph.py # Glyph encode/decode/LUT tests
+    ├── test_pixel_glyph.py # Glyph encode/decode/LUT tests
+    ├── test_api.py         # Flask API endpoint tests
+    ├── test_spectral.py    # Spectral codec (Feature 1)
+    └── test_glyph.py       # Ultra-smooth glyph layer (Feature 2)
 ```
 
 ---
@@ -388,18 +394,21 @@ Glyph encode is I/O-bound on librosa waveform load + fpcalc; decode is PIL/numpy
 ## Tests
 
 ```bash
-pytest tests/ -v   # 5 tests
+pytest tests/ -v   # 109 tests
 ```
 
 | Test file | Coverage |
 |---|---|
 | `test_roundtrip.py` | QR graphic key encode → ID3 → decode → verify |
 | `test_pixel_glyph.py` | Glyph roundtrip, all 5 LUTs, JPEG rejection, LUT monotonicity |
+| `test_api.py` | Flask API: encode/decode/decode-glyph/verify/verify-glyph, size modes |
+| `test_spectral.py` | Spectral codec: lossless bytes↔field round-trip, capacity, PNG-lossless, smoothness (Feature 1) |
+| `test_glyph.py` | Ultra-smooth glyph layer: round-trip, capacity, cohesion transform (Feature 2) |
 
 Shared `sample_mp3` fixture in `tests/conftest.py` — 10s frequency-sweep, no network.
 Skip gracefully without `fpcalc`, `ffmpeg`/`lame`, or QR backend.
 
-**Current status: 5/5 passing.**
+**Current status: 109/109 passing.**
 
 ---
 
@@ -413,9 +422,39 @@ Skip gracefully without `fpcalc`, `ffmpeg`/`lame`, or QR backend.
 | `core/pixel_glyph.py` | `generate_glyph`, `decode_glyph`, `verify_glyph_against_mp3`, `render_glyph_image`, `list_luts`, `get_lut_curve` |
 | `core/graphic_key.py` | `build_graphic_key`, `load_graphic_key_payload`, QR encode/decode, layout constants |
 | `core/decoder.py` | `decode_graphic_key`, `verify_against_mp3` |
+| `core/spectral.py` | `SpectralCodec`, `encode_field`, `decode_field` — lossless bytes↔smooth 256² DCT field (signed-glyph WIP) |
+| `core/glyph.py` | `encode_glyph`, `decode_glyph`, `CAPACITY_BYTES` — ultra-smooth cohesive glyph layer (signed-glyph WIP) |
 | `api/routes.py` | HTTP handlers |
 | `api/schemas.py` | `.mp3` / `.png|.jpg|.jpeg` upload validation |
 | `cli.py` | CLI orchestration |
+
+---
+
+## Signed glyph initiative (work in progress)
+
+Designing a **signed, offline-verifiable certificate of audio authenticity** for
+artists/labels: a single 256×256 glyph that is both the art and the proof.
+Detailed Features 3–7 roadmap to resume from: **`docs/signed-glyph/implementation-plan.md`**.
+Why / capacity math / open decisions: **`docs/signed-glyph/capacity-research.md`**.
+
+**Locked design decisions:**
+- **One canonical 256×256 glyph** (will retire the 64px-decodable + 256-display + 800×300 QR key).
+- **Spectral encoding** — payload lives in **low-frequency 2D-DCT coefficients** per channel, not per pixel, so the inverse transform is a smooth gradient and *every pixel is load-bearing*. Lossless PNG only.
+- **Look** — ultra-smooth atmospheric bloom (Path B): low band + universal invertible cohesion colour transform. (The coherent single-palette aurora look is **proven impossible to carry data losslessly** — routing data through a palette destroys coefficient precision.)
+- **Trust model** — TOFU pinning + domain `.well-known`; embedded **MuSig2** chain (~96 B) for offline identity.
+
+**Mechanism facts (built & tested):**
+- `SpectralCodec`: centered-lattice waterfilling QIM, bits/coeff ∝ decaying amplitude envelope; whitening keystream → uniform symbols, data-independent energy. BER 0 holds only while the field stays in [0,255] (no clipping); carrier `ENV0=6000` → std ~21.
+- `core/glyph.py`: band `FREQ_R=10` (ultra-smooth), **capacity 168 B**, cohesion transform `M = GI·I + (GC−GI)/3·ones`, `GC=0.9 GI=0.62`, `BASE=(70,95,125)` — clip-free over 30+ payloads.
+
+**Phased plan & status** (each feature reviewed before the next):
+1. ✅ Spectral codec core (`core/spectral.py`)
+2. ✅ Ultra-smooth glyph layer + cohesion polish (`core/glyph.py`)
+3. ⬜ Crypto/identity (`core/signing.py`): Ed25519/MuSig2 keys, canonical payload, embedded chain
+4. ⬜ Glyph assembly + manifest (container/version/ECC; per-artist hue selector lives here)
+5. ⬜ Verification ladder (integrity / chain / `.well-known` + TOFU / audio)
+6. ⬜ CLI + API + UI integration
+7. ⬜ Migration (retire 64/QR encode path, keep legacy decode) + docs
 
 ---
 
@@ -453,6 +492,7 @@ Skip gracefully without `fpcalc`, `ffmpeg`/`lame`, or QR backend.
 
 | Date | Change |
 |---|---|
+| 2026-06-22 | Signed-glyph WIP: spectral codec (`core/spectral.py`, Feature 1) + ultra-smooth cohesive glyph layer (`core/glyph.py`, Feature 2); research doc `docs/signed-glyph/capacity-research.md`; +20 tests |
 | 2026-06-21 | Glyph-only web UI redesign (`static/index.html`, Obsidian/Newsreader), new `/api/verify/glyph` route wiring `verify_glyph_against_mp3` |
 | 2026-06-08 | Pixel glyph module (`core/pixel_glyph.py`), 800px graphic key, API/CLI integration, 4 new tests, `fingerprint_bytes`, `get_rms_envelope` |
 | 2026-06-08 | Initial `claude.md` (pre-glyph project brief) |
