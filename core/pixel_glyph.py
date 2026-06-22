@@ -87,29 +87,64 @@ assert len(_MANIFEST_COORDS) == MANIFEST_PIXELS
 
 
 def _finalize_monotonic(curve: np.ndarray) -> np.ndarray:
-    """Spread a near-monotonic curve into a strict bijection on 0..255."""
-    weights = curve.astype(np.float64) + 1.0
-    targets = np.cumsum(weights)
-    targets = targets / targets[-1] * 255.0
-    out = np.zeros(256, dtype=np.uint8)
-    out[0] = 0
+    """Coerce a near-monotonic curve into a strict bijection on 0..255.
+
+    The previous implementation cumsum-normalized the curve before forcing a
+    `+1` minimum step, which destroyed all colour character — every channel
+    collapsed to ``arange(256)``. Instead, keep the natural interpolated
+    values, force a `+1` step only where the rounded curve is flat or
+    decreasing, and linearly compress to fit ``[0, 255]`` if forcing pushed
+    the tail past 255. This preserves the LUT's character (slow purple lift,
+    fast orange ramp, cream tail) while remaining strictly invertible — a
+    hard requirement for the R-channel data path in :func:`decode_glyph`.
+    """
+    work = curve.astype(np.int32).copy()
     for i in range(1, 256):
-        out[i] = max(int(round(targets[i])), int(out[i - 1]) + 1)
-    if out[-1] > 255:
-        return np.arange(256, dtype=np.uint8)
-    out[-1] = 255
-    return out
+        if work[i] <= work[i - 1]:
+            work[i] = work[i - 1] + 1
+    if work[-1] > 255:
+        scaled = work.astype(np.float64) / work[-1] * 255.0
+        out = scaled.astype(np.int32)
+        for i in range(1, 256):
+            if out[i] <= out[i - 1]:
+                out[i] = out[i - 1] + 1
+        if out[-1] > 255:
+            return np.arange(256, dtype=np.uint8)
+        return out.astype(np.uint8)
+    return work.astype(np.uint8)
+
+
+def _interp_curve(stops: list[tuple[float, float]]) -> np.ndarray:
+    """Plain linear-interp curve from anchor stops, clipped to ``[0, 255]``."""
+    xs = np.array([s[0] for s in stops], dtype=np.float64)
+    ys = np.array([s[1] for s in stops], dtype=np.float64)
+    samples = np.linspace(0, 255, 256)
+    return np.clip(np.round(np.interp(samples, xs, ys)), 0, 255).astype(np.uint8)
 
 
 def _build_channel_curve(stops: list[tuple[float, float]]) -> np.ndarray:
-    xs = np.array([s[0] for s in stops], dtype=np.float64)
-    ys = np.array([s[1] for s in stops], dtype=np.float64)
-    for i in range(1, len(ys)):
-        if ys[i] <= ys[i - 1]:
-            ys[i] = min(255.0, ys[i - 1] + 1.0)
-    samples = np.linspace(0, 255, 256)
-    curve = np.clip(np.round(np.interp(samples, xs, ys)), 0, 255).astype(np.uint8)
+    """Build an *invertible* curve — R channel only. Stops are pre-flattened
+    to forbid plateaus, then ``_finalize_monotonic`` guarantees a strict
+    bijection on ``[0, 255]``.
+    """
+    ys = [s[1] for s in stops]
+    fixed = [(stops[0][0], ys[0])]
+    for i in range(1, len(stops)):
+        prev_y = fixed[-1][1]
+        y = ys[i]
+        if y <= prev_y:
+            y = min(255.0, prev_y + 1.0)
+        fixed.append((stops[i][0], y))
+    curve = _interp_curve(fixed)
     return _finalize_monotonic(curve)
+
+
+def _build_aesthetic_curve(stops: list[tuple[float, float]]) -> np.ndarray:
+    """G/B channel curve — preserve natural shape, including dips, since these
+    channels are aesthetic only. The R channel of every spiral pixel carries
+    the data byte, so only R needs an invertible LUT.
+    """
+    return _interp_curve(stops)
 
 
 def _lut_stops() -> dict[str, dict[str, list[tuple[float, float]]]]:
@@ -155,14 +190,21 @@ _LUT_INVERSE: dict[int, dict[str, np.ndarray]] = {}
 
 for _name in LUT_NAMES:
     _channels: dict[str, np.ndarray] = {}
-    _inv_channels: dict[str, np.ndarray] = {}
-    for _ch in ("R", "G", "B"):
-        _curve = _build_channel_curve(_lut_stops()[_name][_ch])
-        assert np.all(np.diff(_curve.astype(int)) > 0), f"{_name}.{_ch} not monotonic"
-        _channels[_ch] = _curve
-        _inv_channels[_ch] = _build_inverse(_curve)
+    _stops = _lut_stops()[_name]
+    _r_curve = _build_channel_curve(_stops["R"])
+    assert np.all(np.diff(_r_curve.astype(int)) > 0), f"{_name}.R not strictly monotonic"
+    _channels["R"] = _r_curve
+    _channels["G"] = _build_aesthetic_curve(_stops["G"])
+    _channels["B"] = _build_aesthetic_curve(_stops["B"])
     _LUT_FORWARD[_name] = _channels
-    _LUT_INVERSE[_LUT_ID[_name]] = _inv_channels
+    # Only R is data-carrying, so only R needs a real inverse. G/B inverse
+    # entries are unused but kept as identities so invert_lut keeps its
+    # 3-tuple signature.
+    _LUT_INVERSE[_LUT_ID[_name]] = {
+        "R": _build_inverse(_r_curve),
+        "G": np.arange(256, dtype=np.uint8),
+        "B": np.arange(256, dtype=np.uint8),
+    }
 
 
 def get_lut_curve(lut_name: str, channel: str) -> np.ndarray:
@@ -333,6 +375,13 @@ _JULIA_MAX_ITER = 120
 _JULIA_ESCAPE_R2 = 4.0
 _JULIA_ZOOM = 1.5
 
+# For the constrained c ring (|c| ∈ [0.3, 0.75]) at zoom 1.5, the visible
+# boundary band is thin — most escaping pixels exit before iteration 10, so
+# the raw Hubbard–Douady normalization crushes the entire field into the
+# bottom ~10% of [0,1] and the LUT only ever sees its dark end. A gamma
+# stretch brightens the thin band while leaving the inner set at exactly 0.
+_JULIA_GAMMA = 0.35
+
 # Boolean (size, size) masks marking which pixels belong to the spiral region.
 _SPIRAL_MASK_64 = np.zeros((GLYPH_SIZE, GLYPH_SIZE), dtype=bool)
 for _row, _col in _SPIRAL_COORDS:
@@ -388,7 +437,15 @@ def _julia_field(fingerprint_bytes: bytes, size: int = 64) -> np.ndarray:
         zr = np.where(active, tmp_r, zr)
         zi = np.where(active, tmp_i, zi)
 
-    return np.clip(smooth / _JULIA_MAX_ITER, 0.0, 1.0).astype(np.float32)
+    normalized = np.clip(smooth / _JULIA_MAX_ITER, 0.0, 1.0)
+    bright = np.where(normalized > 0, normalized ** _JULIA_GAMMA, 0.0)
+    # Contrast-stretch the non-zero band so the brightest boundary pixel hits
+    # ~1.0 — otherwise the LUT only ever samples its dark half (e.g. magma
+    # bottoms out at deep purple) and the render reads as flat grey.
+    peak = bright.max()
+    if peak > 1e-6:
+        bright = np.minimum(bright / peak, 1.0)
+    return bright.astype(np.float32)
 
 
 def _domain_warp(

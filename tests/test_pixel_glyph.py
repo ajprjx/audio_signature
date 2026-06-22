@@ -37,21 +37,51 @@ def test_list_luts_has_expected_set():
     assert set(list_luts()) == set(LUT_NAMES)
 
 
-def test_lut_inverse_identity_byte_level():
-    """For every LUT, invert(apply(raw)) must recover raw for all 256 byte values."""
+def test_r_channel_lut_bijective():
+    """The R channel carries the data byte and must be strictly invertible.
+
+    G and B are aesthetic only (free-shape colour curves), so we only check
+    invertibility on the R channel — that's the one decode_glyph reads back.
+    """
     for lut_name in list_luts():
         lut_id = _LUT_ID[lut_name]
         for v in range(256):
-            r_t, g_t, b_t = apply_lut(v, v, v, lut_name)
-            r_back, g_back, b_back = invert_lut(r_t, g_t, b_t, lut_id)
-            assert (r_back, g_back, b_back) == (v, v, v), f"{lut_name} not bijective at {v}"
+            r_t, _, _ = apply_lut(v, v, v, lut_name)
+            r_back, _, _ = invert_lut(r_t, 0, 0, lut_id)
+            assert r_back == v, f"{lut_name}.R not bijective at {v}"
 
 
-def test_lut_monotonicity():
+def test_r_channel_strictly_monotonic():
+    """R must be strictly monotonic so the inverse LUT is well-defined."""
     for lut_name in list_luts():
-        for ch in ("R", "G", "B"):
-            curve = get_lut_curve(lut_name, ch)
-            assert np.all(np.diff(curve.astype(int)) > 0), f"{lut_name}.{ch} not monotonic"
+        curve = get_lut_curve(lut_name, "R")
+        assert np.all(np.diff(curve.astype(int)) > 0), f"{lut_name}.R not monotonic"
+
+
+def test_aesthetic_channels_diverge_across_luts():
+    """G and B must actually differ between LUTs — otherwise everything renders grey."""
+    g_curves = {name: get_lut_curve(name, "G") for name in list_luts()}
+    b_curves = {name: get_lut_curve(name, "B") for name in list_luts()}
+    names = list(g_curves)
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            assert not np.array_equal(g_curves[names[i]], g_curves[names[j]]), (
+                f"G channels of {names[i]} and {names[j]} are identical"
+            )
+            assert not np.array_equal(b_curves[names[i]], b_curves[names[j]]), (
+                f"B channels of {names[i]} and {names[j]} are identical"
+            )
+
+
+def test_aesthetic_channels_use_full_lut_character():
+    """At least one LUT's G or B channel must reach high values — otherwise
+    the renders sit in the dark/grey end of the colormap."""
+    bright_seen = False
+    for lut_name in list_luts():
+        for ch in ("G", "B"):
+            if int(get_lut_curve(lut_name, ch).max()) >= 150:
+                bright_seen = True
+    assert bright_seen, "No LUT G/B channel reaches the bright end — colormaps look washed out"
 
 
 def test_spiral_and_manifest_partition():

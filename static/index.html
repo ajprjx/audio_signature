@@ -4,257 +4,461 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Audio Signature</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet" />
 <style>
-  :root { --bg:#0A0A0A; --panel:#141414; --fg:#00FFAA; --text:#EDEDED;
-          --sub:#888; --line:#333; --err:#FF5C5C; --warn:#FFC857; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text);
-         font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
-         line-height:1.5; }
-  header { padding:24px; border-bottom:1px solid var(--line); }
-  header h1 { margin:0; font-size:20px; letter-spacing:1px; }
-  header p { margin:4px 0 0; color:var(--sub); font-size:13px; }
-  main { max-width:820px; margin:0 auto; padding:24px; }
-  .tabs { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
-  .tabs button { flex:1; min-width:130px; padding:10px; background:var(--panel);
-                 color:var(--sub); border:1px solid var(--line); border-radius:6px;
-                 cursor:pointer; font-family:inherit; font-size:13px; }
-  .tabs button.active { color:var(--fg); border-color:var(--fg); }
+  :root {
+    --serif: 'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Code', monospace;
+
+    --ink:#e8e6e1; --muted:#8a8a96; --faint:#6a6a76;
+    --line:#1f1f29; --line-soft:#17171e;
+    --panel:#0d0d12; --panel-2:#101016;
+    --accent:#9a7cff; --accent-2:#7c5cff;
+    --ok:#7fe3b0; --err:#ff7b72;
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    margin:0; color:var(--ink);
+    font-family:var(--serif); font-weight:400; line-height:1.55;
+    background:
+      radial-gradient(120% 90% at 50% -8%, #16161f 0%, #0a0a0e 55%, #070709 100%);
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* faint grain for atmosphere */
+  body::before {
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap { position:relative; z-index:1; max-width:980px; margin:0 auto; padding:0 28px 80px; }
+
+  /* ---------- header ---------- */
+  header { display:flex; align-items:center; justify-content:space-between;
+           padding:34px 0 26px; flex-wrap:wrap; gap:16px; }
+  .brand { display:flex; align-items:baseline; gap:11px; }
+  .brand .mark { color:var(--accent); font-size:18px; transform:translateY(1px); }
+  .brand h1 { margin:0; font-weight:500; font-size:25px; letter-spacing:.2px; }
+  .brand .tag { font-family:var(--mono); font-size:10px; letter-spacing:2.5px;
+                text-transform:uppercase; color:var(--faint); margin-left:4px; }
+  nav { display:flex; gap:4px; }
+  nav button { background:none; border:none; cursor:pointer; color:var(--faint);
+               font-family:var(--serif); font-size:15px; padding:6px 14px; border-radius:8px;
+               transition:color .2s, background .2s; }
+  nav button:hover { color:var(--muted); }
+  nav button.on { color:var(--ink); background:rgba(154,124,255,.10); }
+
+  .lede { font-size:16px; color:var(--muted); max-width:60ch; margin:0 0 36px;
+          font-weight:300; }
+  .lede em { color:var(--ink); font-style:italic; }
+
+  /* ---------- section shell ---------- */
   section { display:none; }
-  section.active { display:block; }
-  label { display:block; font-size:12px; color:var(--sub); margin:14px 0 6px; }
-  input[type=file] { width:100%; padding:10px; background:var(--panel);
-                     border:1px dashed var(--line); border-radius:6px;
-                     color:var(--text); font-family:inherit; font-size:12px; }
-  select { width:100%; padding:10px; background:var(--panel); color:var(--text);
-           border:1px solid var(--line); border-radius:6px;
-           font-family:inherit; font-size:13px; }
-  .row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  @media (max-width:560px) { .row { grid-template-columns:1fr; } }
-  button.go { margin-top:18px; padding:11px 20px; background:var(--fg);
-              color:#000; border:none; border-radius:6px; font-weight:600;
-              cursor:pointer; font-family:inherit; font-size:13px; }
-  button.go:disabled { opacity:.5; cursor:not-allowed; }
-  .out { margin-top:22px; }
-  pre { background:var(--panel); border:1px solid var(--line); border-radius:6px;
-        padding:14px; overflow:auto; font-size:12px; color:var(--fg);
-        white-space:pre-wrap; word-break:break-all; }
-  .err { color:var(--err); }
-  .warn { color:var(--warn); font-size:12px; margin-top:6px; }
-  .hint { color:var(--sub); font-size:12px; margin-top:6px; }
-  img.key, img.glyph { border:1px solid var(--line); border-radius:6px;
-                       display:block; }
-  img.key { max-width:100%; margin-top:14px; }
-  img.glyph { image-rendering:pixelated; }
-  .glyph-grid { display:flex; gap:16px; flex-wrap:wrap; margin-top:14px;
-                align-items:flex-start; }
-  .glyph-cell { display:flex; flex-direction:column; gap:6px; }
-  .glyph-cell .caption { color:var(--sub); font-size:11px; }
-  a.dl { display:inline-block; margin-top:10px; color:var(--fg); font-size:12px; }
-  a.dl + a.dl { margin-left:14px; }
-  .spin { color:var(--sub); font-size:13px; }
-  .badge { display:inline-block; padding:2px 8px; border-radius:4px;
-           font-size:11px; border:1px solid var(--line); margin-left:6px; }
-  .badge.ok { color:var(--fg); border-color:var(--fg); }
-  .badge.no { color:var(--warn); border-color:var(--warn); }
+  section.on { display:block; animation:rise .5s ease both; }
+  @keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+
+  .stage { display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:start; }
+  @media (max-width:780px){ .stage { grid-template-columns:1fr; gap:30px; } }
+
+  .heading { font-size:23px; font-weight:500; margin:0 0 4px; }
+  .heading + .note { color:var(--muted); font-weight:300; font-size:14px; margin:0 0 22px; }
+
+  /* ---------- hero / glyph stage ---------- */
+  .hero { display:flex; flex-direction:column; align-items:center; justify-content:center;
+          gap:18px; min-height:300px; text-align:center; }
+  .halo { padding:38px; border-radius:30px;
+          background:radial-gradient(circle at 50% 46%, rgba(154,124,255,.16), transparent 66%); }
+  .glyph-frame { width:200px; height:200px; border-radius:13px; position:relative;
+                 background:var(--panel); border:1px solid var(--line);
+                 display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .glyph-frame img { width:100%; height:100%; image-rendering:pixelated; display:block; }
+  .glyph-frame.empty::after { content:"◇"; color:#2b2b36; font-size:42px; }
+  .glyph-frame.filled { box-shadow:0 22px 60px -16px rgba(154,124,255,.45),
+                                   0 0 0 1px rgba(255,255,255,.05); }
+  .hero .cap { font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.4px; }
+  .badge { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:1.2px;
+           text-transform:uppercase; padding:3px 9px; border-radius:20px; border:1px solid var(--line);
+           color:var(--faint); }
+  .badge.ok { color:var(--accent); border-color:rgba(154,124,255,.5); }
+  .badge.no { color:var(--muted); }
+
+  /* ---------- controls ---------- */
+  .field { margin-bottom:22px; }
+  .lab { font-family:var(--mono); font-size:10.5px; letter-spacing:1.8px; text-transform:uppercase;
+         color:var(--faint); margin-bottom:9px; display:block; }
+  .drop { border:1px dashed var(--line); border-radius:11px; padding:22px 18px; cursor:pointer;
+          text-align:center; color:var(--muted); background:var(--panel);
+          transition:border-color .2s, background .2s, color .2s; font-size:14px; font-weight:300; }
+  .drop:hover, .drop.drag { border-color:var(--accent); color:var(--ink);
+                            background:rgba(154,124,255,.06); }
+  .drop strong { color:var(--ink); font-weight:500; }
+  .drop .fn { display:block; margin-top:7px; font-family:var(--mono); font-size:12px;
+              color:var(--accent); word-break:break-all; }
+  .drop input { display:none; }
+
+  .swatches { display:flex; gap:9px; }
+  .sw { flex:1; height:38px; border-radius:9px; cursor:pointer; position:relative;
+        border:1px solid rgba(255,255,255,.07); transition:transform .15s; }
+  .sw:hover { transform:translateY(-2px); }
+  .sw.on { outline:2px solid var(--accent); outline-offset:2px; }
+  .sw .nm { position:absolute; inset:auto 0 -19px 0; text-align:center; font-family:var(--mono);
+            font-size:9px; letter-spacing:.5px; color:var(--faint); opacity:0; transition:opacity .15s; }
+  .sw:hover .nm, .sw.on .nm { opacity:1; }
+  .swatches { margin-bottom:8px; }
+
+  .seg { display:flex; gap:8px; }
+  .seg button { flex:1; padding:11px; border-radius:9px; border:1px solid var(--line);
+                background:var(--panel); color:var(--muted); cursor:pointer;
+                font-family:var(--serif); font-size:13.5px; transition:all .18s; }
+  .seg button .sub { display:block; font-family:var(--mono); font-size:10px; color:var(--faint);
+                     letter-spacing:.5px; margin-top:2px; }
+  .seg button.on { border-color:var(--accent); color:var(--ink); background:rgba(154,124,255,.07); }
+  .seg button.on .sub { color:var(--accent); }
+
+  .cta { margin-top:8px; width:100%; padding:14px; border:none; border-radius:11px;
+         background:linear-gradient(180deg, var(--accent), var(--accent-2));
+         color:#0a0a0e; font-family:var(--serif); font-weight:600; font-size:15px;
+         letter-spacing:.3px; cursor:pointer; transition:filter .18s, transform .12s; }
+  .cta:hover { filter:brightness(1.07); }
+  .cta:active { transform:translateY(1px); }
+  .cta:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* ---------- readout ---------- */
+  .readout { border-top:1px solid var(--line-soft); margin-top:6px; }
+  .readout .r { display:flex; justify-content:space-between; align-items:center; gap:14px;
+                padding:10px 0; border-bottom:1px solid var(--line-soft); }
+  .readout .k { font-family:var(--mono); font-size:10.5px; letter-spacing:1.2px;
+                text-transform:uppercase; color:var(--faint); white-space:nowrap; }
+  .readout .v { font-family:var(--mono); font-size:13px; color:#d4d2cc; text-align:right;
+                word-break:break-all; }
+  .pill { font-family:var(--mono); font-size:10px; letter-spacing:.8px; text-transform:uppercase;
+          padding:3px 9px; border-radius:20px; border:1px solid var(--line); }
+  .pill.y { color:var(--ok); border-color:rgba(127,227,176,.4); }
+  .pill.n { color:var(--err); border-color:rgba(255,123,114,.4); }
+
+  .dl { display:inline-flex; align-items:center; gap:7px; margin-top:18px; margin-right:18px;
+        color:var(--accent); font-family:var(--mono); font-size:12px; text-decoration:none;
+        border-bottom:1px solid transparent; transition:border-color .2s; }
+  .dl:hover { border-color:var(--accent); }
+
+  /* verify banner */
+  .banner { display:flex; align-items:center; gap:14px; padding:20px 22px; border-radius:13px;
+            margin-bottom:8px; border:1px solid var(--line); background:var(--panel); }
+  .banner .ic { font-size:26px; line-height:1; }
+  .banner .t { font-size:19px; font-weight:500; }
+  .banner .s { font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:.5px; }
+  .banner.yes { border-color:rgba(127,227,176,.45); background:rgba(127,227,176,.06); }
+  .banner.yes .ic, .banner.yes .t { color:var(--ok); }
+  .banner.no { border-color:rgba(255,123,114,.45); background:rgba(255,123,114,.06); }
+  .banner.no .ic, .banner.no .t { color:var(--err); }
+
+  .spin { font-family:var(--mono); font-size:13px; color:var(--muted); }
+  .spin::after { content:"▱▱▱"; animation:dots 1.2s steps(3) infinite; margin-left:6px; }
+  @keyframes dots { 0%{content:"▰▱▱"} 33%{content:"▰▰▱"} 66%{content:"▰▰▰"} }
+  .errbox { font-family:var(--mono); font-size:13px; color:var(--err);
+            border:1px solid rgba(255,123,114,.35); background:rgba(255,123,114,.06);
+            padding:13px 15px; border-radius:10px; }
+  .out:empty { display:none; }
 </style>
 </head>
 <body>
-<header>
-  <h1>◈ AUDIO SIGNATURE</h1>
-  <p>Fingerprint an MP3 into a scannable graphic key + Julia/warp pixel glyph — and decode it back.</p>
-</header>
-<main>
-  <div class="tabs">
-    <button data-tab="encode" class="active">Encode</button>
-    <button data-tab="decode">Decode key</button>
-    <button data-tab="decode-glyph">Decode glyph</button>
-    <button data-tab="verify">Verify</button>
-  </div>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="mark">&#9670;</span>
+      <h1>Audio Signature</h1>
+      <span class="tag">glyphs</span>
+    </div>
+    <nav>
+      <button data-tab="generate" class="on">Generate</button>
+      <button data-tab="decode">Decode</button>
+      <button data-tab="verify">Verify</button>
+    </nav>
+  </header>
 
-  <!-- ENCODE -->
-  <section id="encode" class="active">
-    <label>MP3 file</label>
-    <input type="file" id="encode-file" accept=".mp3,audio/mpeg" />
+  <p class="lede">
+    your mp3 has an acoustic fingerprint. turn it into a <em>glyph</em>.
+    that is, a self-contained, Reed&ndash;Solomon-protected pixel artifact you can read back
+    to the exact bytes, no scanner required.
+  </p>
 
-    <div class="row">
-      <div>
-        <label>LUT (glyph colour palette)</label>
-        <select id="encode-lut">
-          <option value="magma" selected>magma — black → purple → cream</option>
-          <option value="viridis">viridis — purple → green → yellow</option>
-          <option value="inferno">inferno — black → red → pale yellow</option>
-          <option value="plasma">plasma — violet → pink → yellow</option>
-          <option value="copper">copper — black → brown → gold</option>
-        </select>
+  <!-- ───────────── GENERATE ───────────── -->
+  <section id="generate" class="on">
+    <div class="stage">
+      <div class="hero">
+        <div class="halo">
+          <div class="glyph-frame empty" id="gen-frame"></div>
+        </div>
+        <div class="cap" id="gen-cap">no glyph yet</div>
+        <div id="gen-dl"></div>
       </div>
-      <div>
-        <label>Glyph size</label>
-        <select id="encode-size">
-          <option value="64" selected>64 px — decodable (default)</option>
-          <option value="256">256 px — display only (Julia native)</option>
-        </select>
+      <div class="panel">
+        <h2 class="heading">Generate a glyph</h2>
+        <p class="note">Drop in an MP3 and choose a palette.</p>
+
+        <div class="field">
+          <span class="lab">Source audio</span>
+          <label class="drop" id="gen-drop">
+            <strong>Drop an MP3</strong> or click to browse
+            <span class="fn" id="gen-fn"></span>
+            <input type="file" id="gen-file" accept=".mp3,audio/mpeg" />
+          </label>
+        </div>
+
+        <div class="field">
+          <span class="lab">Palette</span>
+          <div class="swatches" id="gen-luts">
+            <div class="sw on" data-lut="magma"   style="background:linear-gradient(135deg,#000,#b5179e,#fff3e0)"><span class="nm">magma</span></div>
+            <div class="sw" data-lut="viridis" style="background:linear-gradient(135deg,#440154,#21908c,#fde725)"><span class="nm">viridis</span></div>
+            <div class="sw" data-lut="inferno" style="background:linear-gradient(135deg,#000,#bb3754,#fcffa4)"><span class="nm">inferno</span></div>
+            <div class="sw" data-lut="plasma"  style="background:linear-gradient(135deg,#6a00a8,#e16462,#fcce25)"><span class="nm">plasma</span></div>
+            <div class="sw" data-lut="copper"  style="background:linear-gradient(135deg,#000,#8a5a2b,#ffd700)"><span class="nm">copper</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="lab">Render</span>
+          <div class="seg" id="gen-size">
+            <button data-size="64" class="on">64&nbsp;px<span class="sub">decodable</span></button>
+            <button data-size="256">256&nbsp;px<span class="sub">display art</span></button>
+          </div>
+        </div>
+
+        <button class="cta" id="gen-go">Generate glyph</button>
+        <div class="out" id="gen-out"></div>
       </div>
     </div>
-    <p class="hint" id="encode-size-hint">
-      The 64 px glyph carries the Reed-Solomon-protected fingerprint and can be
-      decoded back into the original bytes. The 256 px option renders the
-      Julia + domain-warp field at native resolution for display only.
-    </p>
-
-    <button class="go" id="encode-go">Generate graphic key</button>
-    <div class="out" id="encode-out"></div>
   </section>
 
-  <!-- DECODE GRAPHIC KEY -->
+  <!-- ───────────── DECODE ───────────── -->
   <section id="decode">
-    <label>Graphic key (PNG / JPG)</label>
-    <input type="file" id="decode-file" accept=".png,.jpg,.jpeg,image/*" />
-    <p class="hint">Reads the QR payload embedded in the 800×300 graphic key.</p>
-    <button class="go" id="decode-go">Decode payload</button>
-    <div class="out" id="decode-out"></div>
+    <div class="stage">
+      <div class="hero">
+        <div class="halo">
+          <div class="glyph-frame empty" id="dec-frame"></div>
+        </div>
+        <div class="cap" id="dec-cap">no glyph loaded</div>
+      </div>
+      <div class="panel">
+        <h2 class="heading">Decode a glyph</h2>
+        <p class="note">Read a 64&times;64 glyph back to its fingerprint. Display-only 256&nbsp;px renders carry no payload.</p>
+
+        <div class="field">
+          <span class="lab">Pixel glyph &middot; PNG</span>
+          <label class="drop" id="dec-drop">
+            <strong>Drop a glyph PNG</strong> or click to browse
+            <span class="fn" id="dec-fn"></span>
+            <input type="file" id="dec-file" accept=".png,image/png" />
+          </label>
+        </div>
+
+        <button class="cta" id="dec-go">Decode glyph</button>
+        <div class="out" id="dec-out"></div>
+      </div>
+    </div>
   </section>
 
-  <!-- DECODE GLYPH -->
-  <section id="decode-glyph">
-    <label>Pixel glyph (PNG, 64×64)</label>
-    <input type="file" id="decode-glyph-file" accept=".png,image/png" />
-    <p class="hint">
-      Decodes the Reed-Solomon-protected 64×64 glyph. 256 px display glyphs
-      are not decodable — use the 64 px artifact.
-    </p>
-    <button class="go" id="decode-glyph-go">Decode glyph</button>
-    <div class="out" id="decode-glyph-out"></div>
-  </section>
-
-  <!-- VERIFY -->
+  <!-- ───────────── VERIFY ───────────── -->
   <section id="verify">
-    <label>MP3 file</label>
-    <input type="file" id="verify-mp3" accept=".mp3,audio/mpeg" />
-    <label>Graphic key (PNG / JPG)</label>
-    <input type="file" id="verify-key" accept=".png,.jpg,.jpeg,image/*" />
-    <button class="go" id="verify-go">Verify match</button>
-    <div class="out" id="verify-out"></div>
+    <div class="stage">
+      <div class="hero">
+        <div class="halo">
+          <div class="glyph-frame empty" id="ver-frame"></div>
+        </div>
+        <div class="cap" id="ver-cap">awaiting comparison</div>
+      </div>
+      <div class="panel">
+        <h2 class="heading">Verify a glyph</h2>
+        <p class="note">Confirm a glyph was minted from a given track &mdash; byte-for-byte, plus CRC32.</p>
+
+        <div class="field">
+          <span class="lab">Pixel glyph &middot; PNG</span>
+          <label class="drop" id="ver-glyph-drop">
+            <strong>Drop a glyph PNG</strong> or click to browse
+            <span class="fn" id="ver-glyph-fn"></span>
+            <input type="file" id="ver-glyph-file" accept=".png,image/png" />
+          </label>
+        </div>
+        <div class="field">
+          <span class="lab">Source audio &middot; MP3</span>
+          <label class="drop" id="ver-mp3-drop">
+            <strong>Drop an MP3</strong> or click to browse
+            <span class="fn" id="ver-mp3-fn"></span>
+            <input type="file" id="ver-mp3-file" accept=".mp3,audio/mpeg" />
+          </label>
+        </div>
+
+        <button class="cta" id="ver-go">Verify match</button>
+        <div class="out" id="ver-out"></div>
+      </div>
+    </div>
   </section>
-</main>
+</div>
 
 <script>
-// --- tab switching ---
-document.querySelectorAll(".tabs button").forEach(btn => {
+// ---------- nav ----------
+document.querySelectorAll("nav button").forEach(btn => {
   btn.onclick = () => {
-    document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(btn.dataset.tab).classList.add("active");
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("on"));
+    document.querySelectorAll("section").forEach(s => s.classList.remove("on"));
+    btn.classList.add("on");
+    document.getElementById(btn.dataset.tab).classList.add("on");
   };
 });
 
-function show(elId, html) { document.getElementById(elId).innerHTML = html; }
-function busy(elId) { show(elId, '<p class="spin">Processing…</p>'); }
-function errOut(elId, msg) { show(elId, '<pre class="err">Error: ' + msg + '</pre>'); }
-function json(elId, obj) {
-  show(elId, '<pre>' + JSON.stringify(obj, null, 2) + '</pre>');
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const dataUrl = b64 => "data:image/png;base64," + b64;
+function fmtDur(s) {
+  if (s == null || isNaN(s)) return "—";
+  s = Math.round(s); const m = Math.floor(s / 60);
+  return m + ":" + String(s % 60).padStart(2, "0");
 }
-
+function busy(elId) { $(elId).innerHTML = '<p class="spin">working</p>'; }
+function errOut(elId, msg) { $(elId).innerHTML = '<div class="errbox">' + msg + '</div>'; }
+function pill(ok) { return '<span class="pill ' + (ok ? "y" : "n") + '">' + (ok ? "yes" : "no") + '</span>'; }
+function shortHex(h, n = 20) { return h ? (h.length > n ? h.slice(0, n) + "…" : h) : "—"; }
+function rows(pairs) {
+  return '<div class="readout">' + pairs.map(([k, v]) =>
+    '<div class="r"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>'
+  ).join("") + '</div>';
+}
 async function postForm(url, form) {
   const res = await fetch(url, { method: "POST", body: form });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
   return data;
 }
+function setGlyph(frameId, src) {
+  const f = $(frameId);
+  f.classList.remove("empty"); f.classList.add("filled");
+  f.innerHTML = '<img src="' + src + '" alt="glyph" />';
+}
 
-function dataUrl(b64) { return "data:image/png;base64," + b64; }
+// drop-zone wiring: click-to-browse, drag/drop, filename echo, optional preview frame
+function wireDrop(dropId, inputId, fnId, opts = {}) {
+  const drop = $(dropId), input = $(inputId);
+  const onFile = file => {
+    if (!file) return;
+    $(fnId).textContent = file.name;
+    if (opts.previewFrame && /\.png$/i.test(file.name)) {
+      const r = new FileReader();
+      r.onload = e => setGlyph(opts.previewFrame, e.target.result);
+      r.readAsDataURL(file);
+    }
+    if (opts.onChange) opts.onChange(file);
+  };
+  input.addEventListener("change", () => onFile(input.files[0]));
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add("drag");
+  }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove("drag");
+  }));
+  drop.addEventListener("drop", e => {
+    const f = e.dataTransfer.files[0];
+    if (f) { input.files = e.dataTransfer.files; onFile(f); }
+  });
+}
 
-// --- encode ---
-document.getElementById("encode-go").onclick = async () => {
-  const f = document.getElementById("encode-file").files[0];
-  if (!f) return errOut("encode-out", "Choose an MP3 first.");
-  const lut = document.getElementById("encode-lut").value;
-  const size = document.getElementById("encode-size").value;
-  busy("encode-out");
+// ---------- generate ----------
+let genLut = "magma", genSize = "64";
+$("gen-luts").querySelectorAll(".sw").forEach(sw => sw.onclick = () => {
+  $("gen-luts").querySelectorAll(".sw").forEach(s => s.classList.remove("on"));
+  sw.classList.add("on"); genLut = sw.dataset.lut;
+});
+$("gen-size").querySelectorAll("button").forEach(b => b.onclick = () => {
+  $("gen-size").querySelectorAll("button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); genSize = b.dataset.size;
+});
+wireDrop("gen-drop", "gen-file", "gen-fn");
+
+$("gen-go").onclick = async () => {
+  const f = $("gen-file").files[0];
+  if (!f) return errOut("gen-out", "Choose an MP3 first.");
+  busy("gen-out");
   try {
     const fd = new FormData();
-    fd.append("file", f);
-    fd.append("lut", lut);
-    fd.append("size", size);
-    const data = await postForm("/api/encode", fd);
+    fd.append("file", f); fd.append("lut", genLut); fd.append("size", genSize);
+    const d = await postForm("/api/encode", fd);
 
-    const keySrc = dataUrl(data.graphic_key);
-    const glyphSrc = dataUrl(data.glyph);
-    const displaySrc = dataUrl(data.glyph_display);
-    const decodableBadge = data.glyph_decodable
-      ? '<span class="badge ok">decodable</span>'
-      : '<span class="badge no">display only</span>';
+    // glyph_display is always the 256px upscale of the decodable 64px artifact;
+    // when size=256 the native julia render is in `glyph`.
+    const heroSrc = dataUrl(d.glyph_size === 256 ? d.glyph : d.glyph_display);
+    setGlyph("gen-frame", heroSrc);
 
-    // The "glyph" field varies by selected size; the 256 px upscale of the
-    // 64 px decodable artifact is always returned in glyph_display.
-    const glyphCells = [
-      `<div class="glyph-cell">
-         <img class="glyph" src="${glyphSrc}" width="256" height="256" alt="glyph (size=${data.glyph_size})" />
-         <span class="caption">glyph · ${data.glyph_size}px ${decodableBadge}</span>
-         <a class="dl" download="glyph.png" href="${glyphSrc}">⬇ glyph.png</a>
-       </div>`,
-    ];
-    if (data.glyph_size !== 64) {
-      glyphCells.push(
-        `<div class="glyph-cell">
-           <img class="glyph" src="${displaySrc}" width="256" height="256" alt="64px glyph (upscaled)" />
-           <span class="caption">64px decodable · 256× nearest</span>
-           <a class="dl" download="glyph_64_upscaled.png" href="${displaySrc}">⬇ upscaled 64px</a>
-         </div>`
-      );
-    }
+    const decodable = d.glyph_decodable;
+    $("gen-cap").innerHTML =
+      (d.metadata.title || "untitled") + ' · ' + d.glyph_size + 'px ' +
+      '<span class="badge ' + (decodable ? "ok" : "no") + '">' +
+      (decodable ? "decodable" : "display only") + '</span>';
 
-    show("encode-out",
-      `<img class="key" src="${keySrc}" alt="graphic key" />` +
-      `<a class="dl" download="graphic_key.png" href="${keySrc}">⬇ graphic_key.png</a>` +
-      `<div class="glyph-grid">${glyphCells.join("")}</div>` +
-      `<pre>${JSON.stringify({
-         glyph_size: data.glyph_size,
-         glyph_decodable: data.glyph_decodable,
-         metadata: data.metadata,
-       }, null, 2)}</pre>`
-    );
-  } catch (e) { errOut("encode-out", e.message); }
+    const glyphSrc = dataUrl(d.glyph);
+    let dl = '<a class="dl" download="glyph.png" href="' + glyphSrc + '">&#8595; glyph.png (' + d.glyph_size + 'px)</a>';
+    if (d.glyph_size === 256)
+      dl += '<a class="dl" download="glyph_64.png" href="' + dataUrl(d.glyph_display) + '">&#8595; 64px decodable</a>';
+    $("gen-dl").innerHTML = dl;
+
+    const m = d.metadata;
+    $("gen-out").innerHTML = rows([
+      ["Title", m.title || "—"],
+      ["Artist", m.artist || "—"],
+      ["Duration", fmtDur(m.duration)],
+      ["Palette", m.lut_name],
+      ["Fingerprint", m.fingerprint_hash],
+    ]);
+  } catch (e) { errOut("gen-out", e.message); }
 };
 
-// --- decode graphic key ---
-document.getElementById("decode-go").onclick = async () => {
-  const f = document.getElementById("decode-file").files[0];
-  if (!f) return errOut("decode-out", "Choose a graphic key image first.");
-  busy("decode-out");
+// ---------- decode ----------
+wireDrop("dec-drop", "dec-file", "dec-fn", { previewFrame: "dec-frame" });
+$("dec-go").onclick = async () => {
+  const f = $("dec-file").files[0];
+  if (!f) return errOut("dec-out", "Choose a 64×64 glyph PNG first.");
+  busy("dec-out");
   try {
     const fd = new FormData(); fd.append("file", f);
-    json("decode-out", await postForm("/api/decode", fd));
-  } catch (e) { errOut("decode-out", e.message); }
+    const d = await postForm("/api/decode/glyph", fd);
+    $("dec-cap").innerHTML = 'decoded · ' + (d.lut_name || "?") +
+      ' <span class="badge ' + (d.verified ? "ok" : "no") + '">' +
+      (d.verified ? "verified" : "crc mismatch") + '</span>';
+    $("dec-out").innerHTML = rows([
+      ["Fingerprint", shortHex(d.fingerprint_hex)],
+      ["Duration", fmtDur(d.duration)],
+      ["BPM", d.bpm || "—"],
+      ["Palette", d.lut_name || "—"],
+      ["CRC match", pill(d.crc_match)],
+      ["RS recovered", pill(d.rs_recovered)],
+      ["ECC corrections", d.ecc_corrections],
+    ]);
+  } catch (e) { errOut("dec-out", e.message); }
 };
 
-// --- decode pixel glyph ---
-document.getElementById("decode-glyph-go").onclick = async () => {
-  const f = document.getElementById("decode-glyph-file").files[0];
-  if (!f) return errOut("decode-glyph-out", "Choose a 64×64 glyph PNG first.");
-  busy("decode-glyph-out");
+// ---------- verify ----------
+wireDrop("ver-glyph-drop", "ver-glyph-file", "ver-glyph-fn", { previewFrame: "ver-frame" });
+wireDrop("ver-mp3-drop", "ver-mp3-file", "ver-mp3-fn");
+$("ver-go").onclick = async () => {
+  const g = $("ver-glyph-file").files[0], mp3 = $("ver-mp3-file").files[0];
+  if (!g || !mp3) return errOut("ver-out", "Choose both a glyph PNG and an MP3.");
+  busy("ver-out");
   try {
-    const fd = new FormData(); fd.append("file", f);
-    // size defaults to 64 server-side; only 64 is decodable.
-    json("decode-glyph-out", await postForm("/api/decode/glyph", fd));
-  } catch (e) { errOut("decode-glyph-out", e.message); }
-};
-
-// --- verify ---
-document.getElementById("verify-go").onclick = async () => {
-  const mp3 = document.getElementById("verify-mp3").files[0];
-  const key = document.getElementById("verify-key").files[0];
-  if (!mp3 || !key) return errOut("verify-out", "Choose both an MP3 and a graphic key.");
-  busy("verify-out");
-  try {
-    const fd = new FormData(); fd.append("mp3", mp3); fd.append("graphic_key", key);
-    const data = await postForm("/api/verify", fd);
-    const banner = data.match
-      ? '<pre style="color:var(--fg)">✓ MATCH  (similarity ' + data.similarity + ')</pre>'
-      : '<pre class="err">✗ NO MATCH  (similarity ' + data.similarity + ')</pre>';
-    show("verify-out", banner + '<pre>' + JSON.stringify(data, null, 2) + '</pre>');
-  } catch (e) { errOut("verify-out", e.message); }
+    const fd = new FormData(); fd.append("glyph", g); fd.append("mp3", mp3);
+    const d = await postForm("/api/verify/glyph", fd);
+    const ok = d.match;
+    $("ver-cap").textContent = ok ? "fingerprints align" : "fingerprints differ";
+    const banner = '<div class="banner ' + (ok ? "yes" : "no") + '">' +
+      '<span class="ic">' + (ok ? "✓" : "✕") + '</span>' +
+      '<div><div class="t">' + (ok ? "Match" : "No match") + '</div>' +
+      '<div class="s">' + (ok ? "this glyph was minted from this track" : "glyph and track do not correspond") + '</div></div></div>';
+    $("ver-out").innerHTML = banner + rows([
+      ["Bytes match", pill(d.bytes_match)],
+      ["CRC match", pill(d.crc_match)],
+      ["Glyph print", shortHex(d.decoded && d.decoded.fingerprint_hex)],
+      ["Live print", shortHex(d.live && d.live.fingerprint_hex)],
+    ]);
+  } catch (e) { errOut("ver-out", e.message); }
 };
 </script>
 </body>

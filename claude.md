@@ -328,6 +328,7 @@ Key constants in `core/graphic_key.py`:
 | `/api/decode` | POST | `file` (PNG/JPG) | QR payload JSON |
 | `/api/decode/glyph` | POST | `file` (PNG) | Decoded glyph JSON (`fingerprint_bytes` stripped) |
 | `/api/verify` | POST | `mp3`, `graphic_key` | `{ match, similarity, key_metadata, mp3_metadata }` |
+| `/api/verify/glyph` | POST | `mp3`, `glyph` (PNG) | `{ match, bytes_match, crc_match, decoded, live }` (`fingerprint_bytes` stripped from `decoded`) |
 | `/health` | GET | — | `{ status: "ok" }` |
 
 - Max upload: **50 MB** (`MAX_CONTENT_LENGTH`).
@@ -427,7 +428,7 @@ Skip gracefully without `fpcalc`, `ffmpeg`/`lame`, or QR backend.
 5. **Triplicated RGB** — fingerprint and ECC bytes stored as `(b,b,b)` per pixel.
 6. **CRC32 is advisory** — reported separately from RS decode success (`verified` vs `rs_recovered`).
 7. **reedsolo pin** — `reedsolo>=1.7.0`; `RSCodec(120)` returns 240-byte bytearray from `encode()`.
-8. **Web UI not yet updated** — `static/index.html` targets QR graphic key only; API already returns glyph fields.
+8. **Web UI is glyph-only** — `static/index.html` (Obsidian dark theme, Newsreader serif) exposes Generate / Decode / Verify against glyphs exclusively. It calls `/api/encode` (ignoring the `graphic_key` field), `/api/decode/glyph`, and `/api/verify/glyph`. The QR graphic-key routes (`/api/decode`, `/api/verify`) and `core/graphic_key.py` remain in the codebase but are no longer surfaced in the UI.
 9. **ID3 tag is lossy** — full fingerprint in QR and glyph, not in ID3 tag.
 10. **MP3 only** — no FLAC/WAV/AAC in validation or pipelines.
 11. **No API auth** — Flask server is open; suitable for local/dev use.
@@ -452,6 +453,7 @@ Skip gracefully without `fpcalc`, `ffmpeg`/`lame`, or QR backend.
 
 | Date | Change |
 |---|---|
+| 2026-06-21 | Glyph-only web UI redesign (`static/index.html`, Obsidian/Newsreader), new `/api/verify/glyph` route wiring `verify_glyph_against_mp3` |
 | 2026-06-08 | Pixel glyph module (`core/pixel_glyph.py`), 800px graphic key, API/CLI integration, 4 new tests, `fingerprint_bytes`, `get_rms_envelope` |
 | 2026-06-08 | Initial `claude.md` (pre-glyph project brief) |
 | prior | QR capacity fixes, 600px graphic key, static web UI |

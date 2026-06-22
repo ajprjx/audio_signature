@@ -23,6 +23,7 @@ from core.pixel_glyph import (
     list_luts,
     render_glyph_display,
     render_glyph_image,
+    verify_glyph_against_mp3,
 )
 
 from .schemas import (
@@ -210,6 +211,42 @@ def decode_glyph_route():
         return jsonify({"error": f"Processing error: {exc}"}), 500
     finally:
         _cleanup(png_path)
+
+
+@api_bp.route("/verify/glyph", methods=["POST"])
+def verify_glyph_route():
+    """Verify an uploaded MP3 against its uploaded 64×64 pixel glyph.
+
+    Decodes the glyph's Reed–Solomon-protected fingerprint and compares it,
+    byte-for-byte plus CRC32, against a freshly computed fingerprint of the MP3.
+    """
+    mp3_path = None
+    png_path = None
+    try:
+        mp3_file = request.files.get("mp3")
+        glyph_file = request.files.get("glyph")
+        validate_audio_upload(mp3_file)
+        validate_key_upload(glyph_file)
+
+        mp3_path = _save_temp(mp3_file, ".mp3")
+        png_path = _save_temp(glyph_file, ".png")
+
+        result = verify_glyph_against_mp3(png_path, mp3_path)
+        # ``decoded`` carries raw fingerprint_bytes, which is not JSON-serializable.
+        decoded = dict(result.get("decoded", {}))
+        decoded.pop("fingerprint_bytes", None)
+        result["decoded"] = decoded
+        return jsonify(result)
+    except ValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except FingerprintError as exc:
+        return jsonify({"error": str(exc)}), 500
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": f"Processing error: {exc}"}), 500
+    finally:
+        _cleanup(mp3_path, png_path)
 
 
 @api_bp.route("/verify", methods=["POST"])

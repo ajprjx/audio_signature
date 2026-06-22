@@ -120,6 +120,43 @@ def test_verify_rejects_missing_fields(client):
     assert resp.status_code == 400
 
 
+def test_verify_glyph_happy_path(client, sample_mp3, glyph_png, require_fpcalc):
+    with open(sample_mp3, "rb") as mp3_fh, open(glyph_png, "rb") as png_fh:
+        data = {
+            "mp3": (io.BytesIO(mp3_fh.read()), "sample.mp3"),
+            "glyph": (io.BytesIO(png_fh.read()), "glyph.png"),
+        }
+        resp = client.post(
+            "/api/verify/glyph", data=data, content_type="multipart/form-data"
+        )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    j = resp.get_json()
+    assert j["match"] is True
+    assert j["bytes_match"] is True and j["crc_match"] is True
+    # The decoded block is exposed but raw bytes must not leak over the wire.
+    assert "fingerprint_hex" in j["decoded"]
+    assert "fingerprint_bytes" not in j["decoded"]
+    assert j["live"]["fingerprint_hash"]
+
+
+def test_verify_glyph_mismatch(client, sample_mp3_alt, glyph_png, require_fpcalc):
+    with open(sample_mp3_alt, "rb") as mp3_fh, open(glyph_png, "rb") as png_fh:
+        data = {
+            "mp3": (io.BytesIO(mp3_fh.read()), "alt.mp3"),
+            "glyph": (io.BytesIO(png_fh.read()), "glyph.png"),
+        }
+        resp = client.post(
+            "/api/verify/glyph", data=data, content_type="multipart/form-data"
+        )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.get_json()["match"] is False
+
+
+def test_verify_glyph_rejects_missing_fields(client):
+    resp = client.post("/api/verify/glyph", data={}, content_type="multipart/form-data")
+    assert resp.status_code == 400
+
+
 def test_encode_size_64_default_decodable(client, sample_mp3, require_fpcalc):
     with open(sample_mp3, "rb") as fh:
         data = {"file": (io.BytesIO(fh.read()), "sample.mp3"), "size": "64"}
