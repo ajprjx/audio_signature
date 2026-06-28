@@ -7,9 +7,7 @@ import pytest
 from core.fingerprint import (
     FINGERPRINT_BYTE_LEN,
     FingerprintError,
-    fingerprint_similarity,
     fingerprint_to_bytes,
-    fingerprints_match,
     generate_fingerprint,
 )
 
@@ -29,25 +27,6 @@ def test_fingerprint_to_bytes_differs_for_different_inputs():
     a = fingerprint_to_bytes("AQAA_one")
     b = fingerprint_to_bytes("AQAA_two")
     assert a != b
-
-
-def test_fingerprint_similarity_self_is_one():
-    fp = "AQAAQ_some_fingerprint_string"
-    assert fingerprint_similarity(fp, fp) == 1.0
-
-
-def test_fingerprint_similarity_empty_is_zero():
-    assert fingerprint_similarity("", "AQAA") == 0.0
-    assert fingerprint_similarity("AQAA", "") == 0.0
-
-
-def test_fingerprints_match_threshold_behaviour():
-    # Identical fingerprints always match.
-    fp = "AQABZ123"
-    assert fingerprints_match(fp, fp, threshold=0.85)
-
-    # Wildly different fingerprints should fail at the production threshold.
-    assert not fingerprints_match("AQAA" * 4, "ZZZZZ" * 4, threshold=0.85)
 
 
 def test_generate_fingerprint_shape(sample_mp3, require_fpcalc):
@@ -79,5 +58,3 @@ def test_generate_fingerprint_distinct_audio_distinct_hash(
     b = generate_fingerprint(sample_mp3_alt)
     assert a["fingerprint_hash"] != b["fingerprint_hash"]
     assert a["fingerprint_bytes"] != b["fingerprint_bytes"]
-    # Hamming similarity between sweep and noise should be well below match threshold.
-    assert fingerprint_similarity(a["fingerprint"], b["fingerprint"]) < 0.85

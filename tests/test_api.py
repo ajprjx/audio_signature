@@ -59,26 +59,14 @@ def test_encode_happy_path(client, sample_mp3, require_fpcalc):
         resp = client.post("/api/encode", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200, resp.get_data(as_text=True)
     j = resp.get_json()
-    for key in ("graphic_key", "glyph", "glyph_display", "metadata"):
+    for key in ("glyph", "glyph_display", "metadata"):
         assert key in j
     # PNG signature.
-    assert base64.b64decode(j["graphic_key"])[:8] == b"\x89PNG\r\n\x1a\n"
     assert base64.b64decode(j["glyph"])[:8] == b"\x89PNG\r\n\x1a\n"
     md = j["metadata"]
     assert md["lut_name"] == "magma"
     assert len(md["fingerprint_hash"]) == 16
     assert md["duration"] > 0
-
-
-def test_decode_endpoint(client, graphic_key_png, require_qr_backend):
-    with open(graphic_key_png, "rb") as fh:
-        data = {"file": (io.BytesIO(fh.read()), "key.png")}
-        resp = client.post("/api/decode", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200, resp.get_data(as_text=True)
-    j = resp.get_json()
-    assert j["verified"] is True
-    assert j["title"] == "Test Sweep"
-    assert j["fingerprint_hash"]
 
 
 def test_decode_glyph_endpoint(client, glyph_png):
@@ -95,28 +83,11 @@ def test_decode_glyph_endpoint(client, glyph_png):
     assert "fingerprint_bytes" not in j
 
 
-def test_decode_rejects_bad_extension(client):
-    data = {"file": (io.BytesIO(b"junk"), "key.gif")}
-    resp = client.post("/api/decode", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 400
-
-
-def test_verify_happy_path(client, sample_mp3, graphic_key_png, require_qr_backend, require_fpcalc):
-    with open(sample_mp3, "rb") as mp3_fh, open(graphic_key_png, "rb") as png_fh:
-        data = {
-            "mp3": (io.BytesIO(mp3_fh.read()), "sample.mp3"),
-            "graphic_key": (io.BytesIO(png_fh.read()), "key.png"),
-        }
-        resp = client.post("/api/verify", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200, resp.get_data(as_text=True)
-    j = resp.get_json()
-    assert j["match"] is True
-    assert j["similarity"] >= 0.85
-    assert "key_metadata" in j and "mp3_metadata" in j
-
-
-def test_verify_rejects_missing_fields(client):
-    resp = client.post("/api/verify", data={}, content_type="multipart/form-data")
+def test_decode_glyph_rejects_bad_extension(client):
+    data = {"file": (io.BytesIO(b"junk"), "glyph.gif")}
+    resp = client.post(
+        "/api/decode/glyph", data=data, content_type="multipart/form-data"
+    )
     assert resp.status_code == 400
 
 

@@ -1,9 +1,9 @@
 """Shared pytest fixtures.
 
 Provides a synthetic ``sample_mp3`` (10s sine sweep) that the rest of the suite
-builds on, plus a small set of derived fixtures (a generated graphic key PNG, a
-generated pixel glyph PNG, and a fingerprint payload) so individual tests don't
-each re-run the fingerprint pipeline.
+builds on, plus a small set of derived fixtures (a generated pixel glyph PNG and
+a fingerprint payload) so individual tests don't each re-run the fingerprint
+pipeline.
 """
 
 from __future__ import annotations
@@ -16,22 +16,6 @@ import pytest
 
 SAMPLE_RATE = 44100
 DURATION_SEC = 10
-
-
-def _qr_backend_available() -> bool:
-    try:
-        import pyzbar.pyzbar  # noqa: F401
-
-        return True
-    except Exception:
-        pass
-    try:
-        import zxingcpp  # noqa: F401
-
-        return True
-    except Exception:
-        pass
-    return False
 
 
 @pytest.fixture()
@@ -94,30 +78,10 @@ def require_fpcalc():
 
 
 @pytest.fixture()
-def require_qr_backend():
-    if not _qr_backend_available():
-        pytest.skip("No QR decode backend (pyzbar or zxing-cpp) installed")
-
-
-@pytest.fixture()
 def fingerprint_data(sample_mp3, require_fpcalc):
     from core.fingerprint import generate_fingerprint
 
     return generate_fingerprint(sample_mp3)
-
-
-@pytest.fixture()
-def graphic_key_png(tmp_path, sample_mp3, fingerprint_data):
-    from core.graphic_key import build_graphic_key
-
-    out_png = str(tmp_path / "key.png")
-    metadata = {
-        "title": "Test Sweep",
-        "artist": "pytest",
-        "timestamp": "2024-01-15T10:30:00Z",
-    }
-    build_graphic_key(sample_mp3, out_png, metadata, fingerprint_data)
-    return out_png
 
 
 @pytest.fixture()

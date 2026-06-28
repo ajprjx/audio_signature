@@ -25,11 +25,11 @@ def validate_audio_upload(file_storage) -> None:
 
 
 def validate_key_upload(file_storage) -> None:
-    """Validate a werkzeug FileStorage holding a graphic-key image upload."""
+    """Validate a werkzeug FileStorage holding a glyph image upload."""
     if file_storage is None or not file_storage.filename:
         raise ValidationError("No file provided.")
     if _ext(file_storage.filename) not in ALLOWED_KEY_EXT:
-        raise ValidationError("Graphic key must be a .png/.jpg image.")
+        raise ValidationError("Glyph must be a .png/.jpg image.")
 
 
 def validate_glyph_size(size_str: str | None) -> int:

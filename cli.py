@@ -8,9 +8,7 @@ from datetime import datetime, timezone
 
 import click
 
-from core.decoder import decode_graphic_key, verify_against_mp3
 from core.fingerprint import generate_fingerprint
-from core.graphic_key import build_graphic_key
 from core.metadata import read_metadata, resolve_title, write_signature_tag
 from core.pixel_glyph import (
     decode_glyph,
@@ -23,7 +21,7 @@ from core.pixel_glyph import (
 
 @click.group()
 def cli():
-    """Audio Signature — fingerprint MP3s into scannable graphic keys."""
+    """Audio Signature — fingerprint MP3s into self-contained pixel glyphs."""
 
 
 @cli.command()
@@ -32,7 +30,7 @@ def cli():
     "--output",
     "-o",
     default="./keys/",
-    help="Output directory for the graphic key PNG.",
+    help="Output directory for the glyph PNG.",
 )
 @click.option(
     "--lut",
@@ -48,7 +46,7 @@ def cli():
     help="Glyph output size. 256px is display-only (not decodable).",
 )
 def encode(mp3_path: str, output: str, lut: str, size: str):
-    """Fingerprint MP3_PATH, tag it, and write a graphic key PNG."""
+    """Fingerprint MP3_PATH, tag it, and write a pixel glyph PNG."""
     os.makedirs(output, exist_ok=True)
 
     fingerprint_data = generate_fingerprint(mp3_path)
@@ -66,19 +64,14 @@ def encode(mp3_path: str, output: str, lut: str, size: str):
     write_signature_tag(mp3_path, signature_payload)
 
     base = os.path.splitext(os.path.basename(mp3_path))[0]
-    out_png = os.path.join(output, f"{base}_key.png")
     glyph_png = os.path.join(output, f"{base}_glyph.png")
 
-    meta_for_key = dict(meta)
-    meta_for_key["timestamp"] = timestamp
-    build_graphic_key(mp3_path, out_png, meta_for_key, fingerprint_data, lut_name=lut)
     glyph_info = generate_glyph(mp3_path, glyph_png, lut_name=lut)
 
     click.echo(f"Fingerprint hash: {fingerprint_data['fingerprint_hash']}")
     click.echo(f"Duration:         {fingerprint_data['duration']}s")
     click.echo(f"LUT:              {lut}")
     click.echo(f"Signature tag written to: {mp3_path}")
-    click.echo(f"Graphic key saved to:     {out_png}")
     click.echo(f"Pixel glyph saved to:   {glyph_info['glyph_path']}")
     if "display_path" in glyph_info:
         click.echo(f"Glyph display (256px):  {glyph_info['display_path']}")
@@ -135,24 +128,6 @@ def luts():
     click.echo("Available LUTs:")
     for name in list_luts():
         click.echo(f"  - {name}")
-
-
-@cli.command()
-@click.argument("png_path", type=click.Path(exists=True, dir_okay=False))
-def decode(png_path: str):
-    """Decode a graphic key PNG and print its payload."""
-    result = decode_graphic_key(png_path)
-    click.echo(json.dumps(result, indent=2))
-
-
-@cli.command()
-@click.argument("mp3_path", type=click.Path(exists=True, dir_okay=False))
-@click.argument("png_path", type=click.Path(exists=True, dir_okay=False))
-def verify(mp3_path: str, png_path: str):
-    """Verify MP3_PATH against its graphic key PNG_PATH."""
-    result = verify_against_mp3(png_path, mp3_path)
-    click.echo(json.dumps(result, indent=2))
-    raise SystemExit(0 if result["match"] else 1)
 
 
 @cli.command()
