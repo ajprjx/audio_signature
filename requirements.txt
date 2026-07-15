@@ -8,5 +8,6 @@ click
 numpy
 scipy
 reedsolo>=1.7.0
+cryptography>=44.0.0
 # Testing
 pytest
