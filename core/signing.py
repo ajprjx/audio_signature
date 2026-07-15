@@ -38,3 +38,28 @@ def verify(message: bytes, sig: bytes, pub_key: bytes) -> bool:
         return True
     except Exception:
         return False
+
+
+def canonical_message(
+    *,
+    version: int,
+    fingerprint_digest: bytes,
+    duration: int,
+    bpm: int,
+    timestamp: int,
+    pub_key: bytes,
+) -> bytes:
+    """Deterministic big-endian binary serialisation of the signed fields.
+
+    Format ">B16sHBI32s": version(1) + digest(16) + duration(2) + bpm(1)
+    + timestamp(4) + pub_key(32) = 56 bytes total.
+    """
+    return struct.pack(
+        ">B16sHBI32s",
+        version,
+        fingerprint_digest,
+        duration,
+        bpm,
+        timestamp,
+        pub_key,
+    )
