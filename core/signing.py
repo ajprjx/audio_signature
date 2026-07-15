@@ -22,3 +22,19 @@ def generate_keypair() -> tuple[bytes, bytes]:
     priv_bytes = priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
     pub_bytes = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     return priv_bytes, pub_bytes
+
+
+def sign(message: bytes, priv_key: bytes) -> bytes:
+    """Sign message with Ed25519 private key. Returns 64-byte signature."""
+    key = Ed25519PrivateKey.from_private_bytes(priv_key)
+    return key.sign(message)
+
+
+def verify(message: bytes, sig: bytes, pub_key: bytes) -> bool:
+    """Verify Ed25519 signature. Returns False on any failure, never raises."""
+    try:
+        key = Ed25519PublicKey.from_public_bytes(pub_key)
+        key.verify(sig, message)
+        return True
+    except Exception:
+        return False
